@@ -692,6 +692,7 @@ export class Game implements World, ProjWorld, EntWorld {
         else this.shotsLeft = -1;
         this.useAmmo(id);
         if (this.shotsLeft === 1) {
+          this.lastShot = { turn: this.turnCount, desc: `${weaponName('shotgun', this.theme)} ${s.facing > 0 ? 'RIGHT' : 'LEFT'} ${Math.round((-s.aim * 180) / Math.PI)} DEG` };
           this.attacked = true;
           return true;
         }

@@ -138,6 +138,16 @@ Every prompt, aim check, reasoning summary, decision, landing point and token is
 
 **Think you can beat them?** In the arena, pick **YOU** for one seat and any frontier model for the other: same island, same aim guide, same rules, all of it recorded.
 
+<div align="center">
+
+[![YOU vs Claude Fable 5.1](docs/arena/you-vs-claude-fable-5.1/poster.jpg)](https://snakewizardd.github.io/snake-worms/arena/you-vs-claude-fable-5.1/highlights.mp4)
+
+**[▶ HUMAN vs CLAUDE FABLE 5.1 (highlights, 5:44)](https://snakewizardd.github.io/snake-worms/arena/you-vs-claude-fable-5.1/highlights.mp4)** · [report](docs/arena/you-vs-claude-fable-5.1/report.md) · [log](docs/arena/you-vs-claude-fable-5.1/match.jsonl)
+
+*The human took out DUKE SLITHER with a shotgun blast landing 7 px from him. Fable answered with a guide-traced rocket and won on HP after 16 turns, 99 to 14. "GG, Sir Hissalot. The crown stays with the King."*
+
+</div>
+
 ---
 
 ## Share it
