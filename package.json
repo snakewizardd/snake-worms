@@ -1,0 +1,19 @@
+{
+  "name": "snake-worms",
+  "description": "SNAKES: turn-based snake artillery. Sheep rain, holy eggs, a CPU that trolls you. Plays in your browser.",
+  "license": "MIT",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "export": "npm run build && node scripts/export.mjs",
+    "test": "node tests/weapons.ts && node tests/sim.ts 6"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.0",
+    "vite": "^8.0.0"
+  }
+}
