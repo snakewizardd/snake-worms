@@ -19,6 +19,7 @@ if (import.meta.env.MODE === 'arena') {
   void import('./arena/run.ts').then((m) => {
     arenaMod = m;
     m.resizeBroadcast();
+    attachPointer(m.surface());
   });
 }
 
@@ -151,9 +152,20 @@ function draw(): void {
 
 // ---------------------------------------------------------------- mouse
 
+// The broadcast view shows the 640x360 game at 2x inside a 1920x1080 layout, offset 60px down.
 function toCanvas(e: MouseEvent): { x: number; y: number } {
-  const r = canvas.getBoundingClientRect();
+  const el = (e.currentTarget as HTMLCanvasElement | null) ?? canvas;
+  const r = el.getBoundingClientRect();
+  if (el !== canvas) {
+    const bx = ((e.clientX - r.left) / r.width) * 1920;
+    const by = ((e.clientY - r.top) / r.height) * 1080;
+    return { x: bx / 2, y: (by - 60) / 2 };
+  }
   return { x: ((e.clientX - r.left) / r.width) * VIEW_W, y: ((e.clientY - r.top) / r.height) * VIEW_H };
+}
+
+function pxScale(el: HTMLCanvasElement): number {
+  return (el === canvas ? VIEW_W : 960) / el.getBoundingClientRect().width;
 }
 
 function hitRect(x: number, y: number): string | null {
@@ -162,8 +174,9 @@ function hitRect(x: number, y: number): string | null {
 }
 
 let drag: { x: number; y: number; moved: number } | null = null;
-canvas.addEventListener('pointerdown', (e) => {
-  canvas.focus();
+function attachPointer(el: HTMLCanvasElement): void {
+el.addEventListener('pointerdown', (e) => {
+  el.focus();
   const p = toCanvas(e);
   if (scene === 'front' && front) {
     if (e.button === 0) {
@@ -206,9 +219,9 @@ canvas.addEventListener('pointerdown', (e) => {
     if (game.clickWorld(p.x, p.y)) return;
   }
   drag = { x: e.clientX, y: e.clientY, moved: 0 };
-  canvas.setPointerCapture(e.pointerId);
+  el.setPointerCapture(e.pointerId);
 });
-canvas.addEventListener('pointermove', (e) => {
+el.addEventListener('pointermove', (e) => {
   if (scene !== 'game' || !game) return;
   const p = toCanvas(e);
   game.mouseMove(p.x, p.y);
@@ -221,7 +234,7 @@ canvas.addEventListener('pointermove', (e) => {
     }
   }
   if (!drag) return;
-  const k = VIEW_W / canvas.getBoundingClientRect().width;
+  const k = pxScale(el);
   const dx = (e.clientX - drag.x) * k;
   const dy = (e.clientY - drag.y) * k;
   drag.moved += Math.abs(dx) + Math.abs(dy);
@@ -229,12 +242,12 @@ canvas.addEventListener('pointermove', (e) => {
   drag.x = e.clientX;
   drag.y = e.clientY;
 });
-canvas.addEventListener('pointerup', () => (drag = null));
-canvas.addEventListener('pointerleave', () => {
+el.addEventListener('pointerup', () => (drag = null));
+el.addEventListener('pointerleave', () => {
   if (game) game.mouse.inside = false;
 });
-canvas.addEventListener('contextmenu', (e) => e.preventDefault());
-canvas.addEventListener(
+el.addEventListener('contextmenu', (e) => e.preventDefault());
+el.addEventListener(
   'wheel',
   (e) => {
     e.preventDefault();
@@ -244,6 +257,8 @@ canvas.addEventListener(
   },
   { passive: false },
 );
+}
+attachPointer(canvas);
 
 // ---------------------------------------------------------------- loop
 

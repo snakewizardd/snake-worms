@@ -38,10 +38,10 @@ interface ArenaPrefs {
   style?: 'player' | 'oracle';
 }
 
-const ARENA_KEY = 'snakes.arena.v2';
+const ARENA_KEY = 'snakes.arena.v3';
 const ARENA_DEFAULTS: ArenaPrefs = {
-  a: { provider: 'copilot', model: 'claude-fable-5.1', label: 'CLAUDE FABLE 5.1', effort: '' },
-  b: { provider: 'copilot', model: 'gpt-6-astra', label: 'GPT-6 ASTRA', effort: '' },
+  a: { provider: 'human', model: 'human', label: 'YOU', effort: '' },
+  b: { provider: 'copilot', model: 'claude-fable-5.1', label: 'CLAUDE FABLE 5.1', effort: '' },
   theme: 'island',
   snakes: 2,
   toolBudget: 4,
@@ -117,20 +117,21 @@ export class Front {
     const cyc = <T,>(list: T[], cur: T, dir: number): T => list[(list.indexOf(cur) + dir + list.length) % list.length]!;
     const pick = (c: ClankerSetup, dir: number): void => {
       if (!models.length) return;
-      const i = models.findIndex((m) => m.id === c.model && m.provider === c.provider);
-      const m = models[(i + dir + models.length) % models.length]!;
+      const list: ModelChoice[] = [{ provider: 'human', id: 'human', label: 'YOU', note: 'you play this team yourself' }, ...models];
+      const i = list.findIndex((m) => m.id === c.model && m.provider === c.provider);
+      const m = list[(i + dir + list.length) % list.length]!;
       c.provider = m.provider;
       c.model = m.id;
       c.label = m.label;
     };
     const efforts = ['', 'low', 'medium', 'high'];
     const themes: Array<ThemeId | 'random'> = [...THEME_ORDER, 'random'];
-    const show = (c: ClankerSetup): string => (models.length ? c.label : 'LOADING MODELS...');
+    const show = (c: ClankerSetup): string => (c.provider === 'human' ? 'YOU (HUMAN)' : models.length ? c.label : 'LOADING MODELS...');
     return [
-      { label: 'CLANKER A', value: () => show(p.a), change: (d) => pick(p.a, d) },
-      { label: 'A REASONING', value: () => (p.a.effort || 'MODEL DEFAULT').toUpperCase(), change: (d) => (p.a.effort = cyc(efforts, p.a.effort ?? '', d)) },
-      { label: 'CLANKER B', value: () => show(p.b), change: (d) => pick(p.b, d) },
-      { label: 'B REASONING', value: () => (p.b.effort || 'MODEL DEFAULT').toUpperCase(), change: (d) => (p.b.effort = cyc(efforts, p.b.effort ?? '', d)) },
+      { label: 'PLAYER A', value: () => show(p.a), change: (d) => pick(p.a, d) },
+      { label: 'A REASONING', value: () => (p.a.provider === 'human' ? '-' : (p.a.effort || 'MODEL DEFAULT').toUpperCase()), change: (d) => (p.a.effort = cyc(efforts, p.a.effort ?? '', d)) },
+      { label: 'PLAYER B', value: () => show(p.b), change: (d) => pick(p.b, d) },
+      { label: 'B REASONING', value: () => (p.b.provider === 'human' ? '-' : (p.b.effort || 'MODEL DEFAULT').toUpperCase()), change: (d) => (p.b.effort = cyc(efforts, p.b.effort ?? '', d)) },
       { label: 'PLAY STYLE', value: () => ((p.style ?? 'player') === 'player' ? 'REAL PLAYER (NO SOLVER)' : 'FULL ORACLE (SOLVER)'), change: () => (p.style = (p.style ?? 'player') === 'player' ? 'oracle' : 'player') },
       { label: 'WORLD', value: () => (p.theme === 'random' ? 'RANDOM' : THEMES[p.theme].name), change: (d) => {
         p.theme = cyc(themes, p.theme, d);
@@ -150,6 +151,10 @@ export class Front {
   private startArena(): FrontResult {
     const p = this.arena;
     if (!cachedModels().length) return null;
+    if (p.a.provider === 'human' && p.b.provider === 'human') {
+      this.modelsError = 'PICK A MODEL FOR AT LEAST ONE SEAT (OR USE HOTSEAT)';
+      return null;
+    }
     saveArenaPrefs(p);
     sfx.blip();
     const s: Settings = {
@@ -159,12 +164,14 @@ export class Front {
       snakesPerTeam: p.snakes,
       suddenDeath: p.suddenDeath,
       maxTurns: p.maxTurns,
-      turnSeconds: 45,
+      turnSeconds: 60,
       startHp: 100,
       crates: true,
       hazards: true,
       banter: true,
       teamName: '',
+      // Same aiming information for everyone: the human gets the long aim guide the model's aim_guide tool shows.
+      aimGuide: 'long',
       arena: { a: { ...p.a }, b: { ...p.b }, toolBudget: p.toolBudget, thinkSeconds: p.thinkSeconds, record: p.record, costCap: p.costCap ?? 0, style: p.style ?? 'player' },
     };
     return { start: s };

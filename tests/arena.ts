@@ -25,7 +25,7 @@ async function play(name: string, a: string, b: string, opts: { thinkSeconds: nu
     maxTurns: opts.maxTurns,
     suddenDeath: 6,
     arena: {
-      a: { provider: 'mock', model: a, label: a.toUpperCase() },
+      a: a === 'human' ? { provider: 'human', model: 'human', label: 'YOU' } : { provider: 'mock', model: a, label: a.toUpperCase() },
       b: { provider: 'mock', model: b, label: b.toUpperCase() },
       toolBudget: 4,
       thinkSeconds: opts.thinkSeconds,
@@ -88,7 +88,7 @@ async function play(name: string, a: string, b: string, opts: { thinkSeconds: nu
     `  oracle accuracy: ${accuracy}${misses.length ? `  misses: ${misses.slice(0, 4).join(' | ')}` : ''}`,
   );
   let ok = !!summary && existsSync(join(dir, 'report.md')) && g.phase === 'over' && !notes.some((n) => n.startsWith('STUCK'));
-  if (a !== 'mock-stall' && b !== 'mock-stall' && count('commit') + count('turn_lost') < Math.min(g.turnCount, 4)) {
+  if (a !== 'mock-stall' && b !== 'mock-stall' && a !== 'human' && count('commit') + count('turn_lost') < Math.min(g.turnCount, 4)) {
     ok = false;
     notes.push('  FAIL: too few commits');
   }
@@ -108,6 +108,14 @@ async function play(name: string, a: string, b: string, opts: { thinkSeconds: nu
     notes.push(`  real-player mode: ${fine ? 'aim_guide used, no solver tools, physics rules + landing feedback present' : 'NOT CORRECT'}`);
     if (!fine) ok = false;
   }
+  if (a === 'human') {
+    const sys = String(((log.find((e) => e.type === 'match_start') as Record<string, unknown>)?.systemPrompts as string[])?.[1] ?? '');
+    const humanTurns = count('turn_start', (e) => e.human === true);
+    const told = log.some((e) => e.type === 'turn_start' && !e.human && String(e.prompt).includes('OPPONENT (YOU)'));
+    const fine = sys.includes('HUMAN player') && humanTurns > 0 && told && g.phase === 'over';
+    notes.push(`  human vs model: ${fine ? `ok (${humanTurns} human turns, model told it faces a human and what the human did)` : 'NOT CORRECT'}`);
+    if (!fine) ok = false;
+  }
   const leaked = log.filter((e) => e.type === 'tool' && e.name === 'taunt' && /[<>]/.test(String((e.result as Record<string, unknown>)?.shown ?? '')));
   if (leaked.length) {
     ok = false;
@@ -123,6 +131,7 @@ const runs = [
   await play('timeouts', 'mock-stall', 'mock-sharpshooter', { thinkSeconds: 1, maxTurns: 6, snakes: 2, theme: 'acc', seed: 99 }),
   await play('budget', 'mock-sharpshooter', 'mock-chaos', { thinkSeconds: 30, maxTurns: 30, snakes: 2, theme: 'island', seed: 31337, costCap: 2 }),
   await play('player', 'mock-sharpshooter', 'mock-chaos', { thinkSeconds: 30, maxTurns: 10, snakes: 2, theme: 'medieval', seed: 2026, style: 'player' }),
+  await play('human', 'human', 'mock-sharpshooter', { thinkSeconds: 30, maxTurns: 6, snakes: 3, theme: 'acc', seed: 4040, style: 'player' }),
 ];
 let failed = 0;
 for (const r of runs) {

@@ -136,6 +136,8 @@ Claude Fable 5.1 worked the ballistics out in its head, extrapolating past the e
 
 Every prompt, aim check, reasoning summary, decision, landing point and token is in the log. The video is the live broadcast, recorded as it happened.
 
+**Think you can beat them?** In the arena, pick **YOU** for one seat and any frontier model for the other: same island, same aim guide, same rules, all of it recorded.
+
 ---
 
 ## Share it
@@ -166,7 +168,7 @@ npm run arena       # then open http://127.0.0.1:5173 → LIVE CLANKER ARENA
 npm run test:arena  # free: full arena matches with mock players, no model calls
 ```
 
-Pick any two models from your Copilot catalog, or the free mock players. Choose **Real Player** (aim guide + physics) or **Full Oracle** (the engine's shot solver), and set a hard **AI-credit budget cap**. Each match saves a 1080p broadcast video, a turn-by-turn `report.md` and a complete `match.jsonl` to `arena-logs/`. Models run in locked-down sessions that can only see the SNAKES game tools. To make a highlight cut that fast-forwards the thinking: `node scripts/highlights.mjs arena-logs/<match>`.
+Pick **YOU** for a seat to play a frontier model yourself (keyboard + mouse, with the same aim guide the model gets), or pick two models to watch them fight. Free mock players are built in too. Choose **Real Player** (aim guide + physics) or **Full Oracle** (the engine's shot solver), and set a hard **AI-credit budget cap**. Each match saves a 1080p broadcast video, a turn-by-turn `report.md` and a complete `match.jsonl` to `arena-logs/`. Models run in locked-down sessions that can only see the SNAKES game tools. To make a highlight cut that fast-forwards the thinking: `node scripts/highlights.mjs arena-logs/<match>`.
 
 Want to change how the game feels? Start here:
 

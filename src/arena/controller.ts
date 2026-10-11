@@ -66,6 +66,7 @@ interface TurnCtx {
   shotSeq: number;
   predictedEnemy: number | null;
   abortSent: boolean;
+  human?: boolean;
 }
 
 interface TurnRecord {
@@ -177,6 +178,7 @@ export class ArenaController {
         maxTurns: g.settings.maxTurns ?? 0,
         suddenDeathRound: g.settings.suddenDeath,
         style: this.style,
+        opponentHuman: o.provider === 'human',
       });
     const sysA = info(ta, tb, this.setup.a, this.setup.b);
     const sysB = info(tb, ta, this.setup.b, this.setup.a);
@@ -216,15 +218,22 @@ export class ArenaController {
     if (!this.started || this.ended) return;
     this.driveJob();
     this.driveMotion();
+    const shot = g.lastShot;
+    if (shot && shot !== this.seenShot) {
+      this.seenShot = shot;
+      const t = g.active?.team;
+      if (t && !t.clanker) this.push(this.teamIndex(t), `FIRES: ${shot.desc}`, 'commit');
+    }
     if (g.phase === 'over') {
       void this.finish();
       return;
     }
     const a = g.active;
-    if (a && a.team.clanker && g.turnCount !== this.turnSeen && (g.phase === 'intro' || g.phase === 'play')) {
+    if (a && g.turnCount !== this.turnSeen && (g.phase === 'intro' || g.phase === 'play')) {
       this.turnSeen = g.turnCount;
       this.closeRecord();
-      this.beginTurn(a);
+      if (a.team.clanker) this.beginTurn(a);
+      else this.beginHumanTurn(a);
     }
     const c = this.cur;
     if (c && !c.done && !c.committed && !c.abortSent && (g.active !== c.snake || !c.snake.alive || !(g.phase === 'intro' || g.phase === 'play'))) {
@@ -314,6 +323,44 @@ export class ArenaController {
   }
 
   // ------------------------------------------------------------------ turns
+
+  /** A human seat plays with the normal controls; we only track the turn so the model hears what happened. */
+  private beginHumanTurn(s: Snake): void {
+    const g = this.g;
+    const team = this.teamIndex(s.team);
+    const st = this.stats[team];
+    this.lastCtx = {
+      team,
+      teamObj: s.team,
+      snake: s,
+      turn: g.turnCount,
+      oracleLeft: 0,
+      movesLeft: 0,
+      tauntsLeft: 0,
+      committed: true,
+      done: true,
+      startedAt: Date.now(),
+      deadline: Infinity,
+      hpBefore: new Map(g.snakes.map((o) => [o, o.hp])),
+      posBefore: new Map(g.snakes.map((o) => [o, { x: o.x, y: o.y }])),
+      aliveBefore: new Set(g.snakes.filter((o) => o.alive)),
+      decision: '',
+      plan: null,
+      shots: new Map(),
+      shotSeq: 0,
+      predictedEnemy: null,
+      abortSent: true,
+      human: true,
+    };
+    this.pendingTaunts = [];
+    this.stats[team === 0 ? 1 : 0].status = 'WAITING';
+    st.turns++;
+    st.status = 'YOUR TURN';
+    g.holdClock = false;
+    g.thinking = null;
+    this.push(team, `UP: ${s.name} (${s.hp} HP)`, 'turn');
+    this.log('turn_start', { team, model: 'human', snake: s.name, human: true });
+  }
 
   private beginTurn(s: Snake): void {
     const g = this.g;
@@ -441,6 +488,11 @@ export class ArenaController {
     if (!c) return;
     this.lastCtx = null;
     const g = this.g;
+    if (c.human) {
+      c.decision = g.lastShot && g.lastShot.turn === c.turn ? g.lastShot.desc : 'no attack';
+      this.stats[c.team].lastDecision = c.decision;
+      this.stats[c.team].status = 'WAITING';
+    }
     const parts: string[] = [];
     for (const s of g.snakes) {
       const before = c.hpBefore.get(s) ?? 0;
@@ -476,6 +528,7 @@ export class ArenaController {
   }
 
   private lastCtx: TurnCtx | null = null;
+  private seenShot: { turn: number; desc: string } | null = null;
 
   // ------------------------------------------------------------------ tools
 

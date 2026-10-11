@@ -114,6 +114,16 @@ export class MockAdapter implements Adapter {
   async stop(): Promise<void> {}
 }
 
+/** The human seat: they play with the normal controls, so the host never asks it for a turn. */
+export class HumanSeat implements Adapter {
+  async start(): Promise<void> {}
+  async turn(): Promise<TurnResult> {
+    return { ok: true, usage: emptyUsage(), ms: 0 };
+  }
+  async abort(): Promise<void> {}
+  async stop(): Promise<void> {}
+}
+
 function strip(c: Cand): Record<string, unknown> {
   const o: Record<string, unknown> = { weapon: c.weapon, facing: c.facing };
   for (const k of ['elevation_deg', 'power', 'fuse', 'target_x', 'target_y'] as const) if (c[k] !== undefined) o[k] = c[k];

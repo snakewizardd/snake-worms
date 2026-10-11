@@ -6,7 +6,7 @@ import type { MatchInfo, ModelChoice, ToolExec, TurnResult } from '../src/arena/
 import type { Activity } from '../src/arena/link.ts';
 import { toolsFor } from '../src/arena/schema.ts';
 import type { Adapter } from './adapters/types.ts';
-import { MockAdapter, MOCK_MODELS } from './adapters/mock.ts';
+import { HumanSeat, MockAdapter, MOCK_MODELS } from './adapters/mock.ts';
 import { CopilotAdapter, listCopilotModels, stopCopilot } from './adapters/copilot.ts';
 import { writeReport } from './report.ts';
 
@@ -66,7 +66,7 @@ export class ArenaHost {
   async start(info: MatchInfo): Promise<string> {
     const dir = join(this.logRoot, info.matchId);
     mkdirSync(dir, { recursive: true });
-    const make = (provider: string): Adapter => (provider === 'mock' ? new MockAdapter(this.opts.mockDelayMs ?? 600) : new CopilotAdapter(this.stateDir));
+    const make = (provider: string): Adapter => (provider === 'human' ? new HumanSeat() : provider === 'mock' ? new MockAdapter(this.opts.mockDelayMs ?? 600) : new CopilotAdapter(this.stateDir));
     const adapters: [Adapter, Adapter] = [make(info.players[0].provider), make(info.players[1].provider)];
     const m: Match = { info, dir, adapters, videoBytes: 0 };
     this.matches.set(info.matchId, m);

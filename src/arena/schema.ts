@@ -163,10 +163,12 @@ export interface PromptInfo {
   maxTurns: number;
   suddenDeathRound: number;
   style: ArenaStyle;
+  opponentHuman?: boolean;
 }
 
 export function systemPrompt(p: PromptInfo): string {
-  return `You are ${p.label}, a frontier AI competing LIVE against another frontier AI (${p.opponent}) in SNAKES, a Worms-style turn-based artillery game. This match is being recorded and broadcast. Play to win.
+  const vs = p.opponentHuman ? `a HUMAN player (${p.opponent}) who is playing with keyboard and mouse` : `another frontier AI (${p.opponent})`;
+  return `You are ${p.label}, a frontier AI competing LIVE against ${vs} in SNAKES, a Worms-style turn-based artillery game. This match is being recorded and broadcast. Play to win.
 
 YOU CONTROL: team "${p.teamName}" (${p.snakesPerTeam} snakes). OPPONENT: team "${p.opponentTeam}". World skin: ${p.world}.
 

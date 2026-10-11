@@ -109,6 +109,9 @@ export class Game implements World, ProjWorld, EntWorld {
   thinking: { team: Team; since: number; status: string } | null = null;
   /** Every explosion with the turn it happened in (live-arena shot feedback). */
   blastLog: Array<{ turn: number; x: number; y: number; r: number }> = [];
+  /** What the last attack was, in words (live arena reports the human's shots to the model). */
+  lastShot: { turn: number; desc: string } | null = null;
+  private lastPower = 0;
   paused = false;
   pauseSel = 0;
   showControls = false;
@@ -142,14 +145,15 @@ export class Game implements World, ProjWorld, EntWorld {
       const def: TeamDef = { ...base };
       if (index === 0 && settings.teamName.trim()) def.name = settings.teamName.trim().toUpperCase().slice(0, 16);
       const arena = settings.mode === 'arena' ? settings.arena : undefined;
-      const cpu = settings.mode === 'watch' || settings.mode === 'arena' || (settings.mode === 'cpu' && index === 1);
+      const seat = arena ? (index === 0 ? arena.a : arena.b) : undefined;
+      const human = seat?.provider === 'human';
+      const cpu = !human && (settings.mode === 'watch' || settings.mode === 'arena' || (settings.mode === 'cpu' && index === 1));
       if (cpu && settings.mode === 'cpu') def.name = `${def.name} (CPU)`;
       const team: Team = { def, index, snakes: [], cursor: 0, cpu, ammo: startingAmmo(), weapon: 'bazooka' };
-      if (arena) {
-        const c = index === 0 ? arena.a : arena.b;
-        def.name = c.label.toUpperCase().slice(0, 18);
-        team.clanker = { label: c.label, model: c.model, provider: c.provider };
-        // Interactive flight tools need frame-by-frame steering a turn-based model cannot do.
+      if (arena && seat) {
+        def.name = seat.label.toUpperCase().slice(0, 18);
+        if (!human) team.clanker = { label: seat.label, model: seat.model, provider: seat.provider };
+        // Same arsenal for both seats: interactive flight tools need frame-by-frame steering a turn-based model cannot do.
         team.ammo.set('jetpack', 0);
         team.ammo.set('vine', 0);
         team.ammo.set('surrender', 0);
@@ -608,6 +612,15 @@ export class Game implements World, ProjWorld, EntWorld {
   }
 
   private afterAttack(controllable: boolean): void {
+    const s = this.active;
+    if (s) {
+      const def = WEAPON_BY_ID[this.weapon];
+      const bits = [weaponName(this.weapon, this.theme), s.facing > 0 ? 'RIGHT' : 'LEFT'];
+      if (def.usage === 'charge' || def.usage === 'targetCharge' || this.weapon === 'shotgun') bits.push(`${Math.round((-s.aim * 180) / Math.PI)} DEG`);
+      if (def.usage === 'charge' || def.usage === 'targetCharge') bits.push(`${Math.round(this.lastPower * 100)}%`);
+      if (def.usage === 'target' || def.usage === 'targetCharge') bits.push(`AT ${Math.round(this.tx)},${Math.round(this.ty)}`);
+      this.lastShot = { turn: this.turnCount, desc: bits.join(' ') };
+    }
     this.attacked = true;
     this.cam.manual = false;
     this.menuOpen = false;
@@ -623,6 +636,7 @@ export class Game implements World, ProjWorld, EntWorld {
 
   fireCharged(power: number): void {
     const s = this.active;
+    this.lastPower = Math.max(0.06, power);
     this.charging = false;
     sfx.chargeStop();
     if (!s) return;

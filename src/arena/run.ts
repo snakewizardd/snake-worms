@@ -50,6 +50,11 @@ export function active(): boolean {
   return !!run;
 }
 
+/** The broadcast canvas, so the page can route mouse input from it (human vs model). */
+export function surface(): HTMLCanvasElement {
+  return bcanvas;
+}
+
 /** True while a match is running (exit is blocked until it is saved). */
 export function blocking(): boolean {
   return !!run && !run.ctl.ended;
