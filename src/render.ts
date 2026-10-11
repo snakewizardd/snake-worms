@@ -76,11 +76,13 @@ export function renderGame(ctx: CanvasRenderingContext2D, g: Game): void {
   g.particles.draw(ctx, cx, cy);
   drawAim(ctx, g, cx, cy);
   drawTargetCursor(ctx, g, cx, cy);
+  drawGhosts(ctx, g, cx, cy);
   if (bd) bd.drawWaterFront(ctx, cx, cy, g.tick, vw, vh);
   ctx.restore();
 
   const toS = (x: number, y: number): [number, number] => [(x - cx) * z, (y - cy) * z];
   drawLabels(ctx, g, toS);
+  drawThinking(ctx, g, toS);
   for (const p of g.projectiles) {
     if (p.showFuse > 0) {
       const [px, py] = toS(p.x, p.y);
@@ -255,6 +257,40 @@ function drawLabels(ctx: CanvasRenderingContext2D, g: Game, toS: (x: number, y: 
   }
 }
 
+function drawGhosts(ctx: CanvasRenderingContext2D, g: Game, cx: number, cy: number): void {
+  for (const gh of g.ghosts) {
+    const a = Math.min(1, gh.life / gh.max) * (gh.label === 'GO' ? 1 : gh.label === 'SIM' ? 0.85 : 0.5);
+    ctx.globalAlpha = a;
+    ctx.fillStyle = gh.color;
+    const p = gh.pts;
+    for (let i = 0; i + 1 < p.length; i += 2) {
+      if ((i / 2) % 2 === 1) continue;
+      ctx.fillRect(Math.round(p[i]! - cx), Math.round(p[i + 1]! - cy), gh.label === 'SEARCH' ? 1 : 2, gh.label === 'SEARCH' ? 1 : 2);
+    }
+    const ex = p[p.length - 2]! - cx;
+    const ey = p[p.length - 1]! - cy;
+    ctx.strokeStyle = gh.color;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(ex - 5, ey - 5);
+    ctx.lineTo(ex + 5, ey + 5);
+    ctx.moveTo(ex + 5, ey - 5);
+    ctx.lineTo(ex - 5, ey + 5);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+}
+
+function drawThinking(ctx: CanvasRenderingContext2D, g: Game, toS: (x: number, y: number) => [number, number]): void {
+  const s = g.active;
+  if (!s || !g.thinking || g.thinking.team !== s.team || !s.alive) return;
+  const [sx, sy] = toS(s.x, s.y);
+  const dots = '.'.repeat(1 + (Math.floor(g.tick / 15) % 3));
+  const secs = Math.floor((g.tick - g.thinking.since) / 60);
+  const y = Math.round(sy - (g.cam.z < 0.55 ? 36 : 50 * Math.max(0.7, g.cam.z)));
+  drawText(ctx, `${g.thinking.status}${dots} ${secs}S`, Math.round(sx), y, { color: s.team.def.light, align: 'center' });
+}
+
 function drawBubbles(ctx: CanvasRenderingContext2D, g: Game, toS: (x: number, y: number) => [number, number]): void {
   for (const b of g.bubbles) {
     const [sx, sy] = toS(b.s.x, b.s.y);
@@ -353,7 +389,7 @@ function drawHud(ctx: CanvasRenderingContext2D, g: Game): void {
     ctx.fillStyle = '#000';
     ctx.fillRect(9, VIEW_H - 29, 28, 20);
     drawText(ctx, g.phase === 'guide' ? '--' : String(sec), 23, VIEW_H - 27, { color: retreat ? '#ffd84a' : '#fff', scale: 2, align: 'center' });
-    if (s.team.cpu) {
+    if (s.team.cpu && !s.team.clanker) {
       drawText(ctx, 'CPU', 23, VIEW_H - 42, { color: s.team.def.light, align: 'center' });
       drawText(ctx, 'HOLD SPACE: FAST FORWARD', 6, VIEW_H - 54, { color: '#99aaaa' });
     }
@@ -399,8 +435,8 @@ function drawHud(ctx: CanvasRenderingContext2D, g: Game): void {
     drawText(ctx, weaponName(id, g.theme), 30, 7, { color: '#ffe14d' });
     drawText(ctx, ammo < 0 ? 'UNLIMITED' : `AMMO ${ammo}`, 30, 16, { color: '#aaaabb' });
     if (def.fuse) drawText(ctx, `FUSE ${g.fuse}S (1-5)`, 8, 27, { color: '#fff' });
-    drawText(ctx, 'TAB', 172, 7, { color: '#99aaaa', align: 'right' });
-    ui.rects.push({ x: 4, y: 4, w: 172, h: 24, act: 'menu' });
+    if (!s.team.cpu) drawText(ctx, 'TAB', 172, 7, { color: '#99aaaa', align: 'right' });
+    if (!s.team.cpu) ui.rects.push({ x: 4, y: 4, w: 172, h: 24, act: 'menu' });
   }
 
   g.feed.forEach((m, i) => drawText(ctx, m.text, VIEW_W / 2, 6 + i * 11, { color: m.color, align: 'center', alpha: Math.min(1, m.life / 20) }));
@@ -415,8 +451,9 @@ function drawHud(ctx: CanvasRenderingContext2D, g: Game): void {
   }
 
   if (g.phase === 'over' && g.phaseT > 90 && g.tick % 60 < 44) {
-    drawText(ctx, 'ENTER: REMATCH ON A NEW ISLAND    ESC: MAIN MENU', VIEW_W / 2, by + 6, { align: 'center' });
+    drawText(ctx, g.settings.mode === 'arena' ? 'ESC: BACK TO MENU' : 'ENTER: REMATCH ON A NEW ISLAND    ESC: MAIN MENU', VIEW_W / 2, by + 6, { align: 'center' });
   }
+  if (g.phase === 'over' && g.endReason) drawText(ctx, g.endReason, VIEW_W / 2, by - 8, { align: 'center', color: '#c8d0ff' });
   if (g.suddenDeath) drawText(ctx, 'SUDDEN DEATH', VIEW_W - 136, 70, { color: '#ff6a6a' });
 }
 

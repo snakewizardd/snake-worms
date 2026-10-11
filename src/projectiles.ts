@@ -555,7 +555,8 @@ export class FallingSheep extends Projectile {
       if (!w.sim) sfx.bleat(1.1 + this.bounces * 0.15);
     }
     if (this.sinceTouch >= 0) this.sinceTouch++;
-    if (this.bounces >= 3 || this.sinceTouch > 70 || (this.age > 5 && this.hitSnake(w, 5))) {
+    // A sheep wedged in a crevice may never register a bounce; it always goes off eventually.
+    if (this.bounces >= 3 || this.sinceTouch > 70 || this.age > 420 || (this.age > 5 && this.hitSnake(w, 5))) {
       this.alive = false;
       if (!w.sim) w.particles.wool(this.x, this.y, 18);
       w.explode(this.x, this.y, 30, 30, 6);

@@ -101,6 +101,14 @@ export class Game implements World, ProjWorld, EntWorld {
   feed: FeedMsg[] = [];
   banners: Banner[] = [];
   winner: Team | null = null;
+  endReason = '';
+  /** Freezes the turn timer (a live model is thinking). */
+  holdClock = false;
+  /** Live-arena overlays: predicted flight paths the models are testing, and who is thinking. */
+  ghosts: Array<{ pts: number[]; color: string; life: number; max: number; label: string }> = [];
+  thinking: { team: Team; since: number; status: string } | null = null;
+  /** Every explosion with the turn it happened in (live-arena shot feedback). */
+  blastLog: Array<{ turn: number; x: number; y: number; r: number }> = [];
   paused = false;
   pauseSel = 0;
   showControls = false;
@@ -133,9 +141,20 @@ export class Game implements World, ProjWorld, EntWorld {
     theme.teams.forEach((base, index) => {
       const def: TeamDef = { ...base };
       if (index === 0 && settings.teamName.trim()) def.name = settings.teamName.trim().toUpperCase().slice(0, 16);
-      const cpu = settings.mode === 'watch' || (settings.mode === 'cpu' && index === 1);
+      const arena = settings.mode === 'arena' ? settings.arena : undefined;
+      const cpu = settings.mode === 'watch' || settings.mode === 'arena' || (settings.mode === 'cpu' && index === 1);
       if (cpu && settings.mode === 'cpu') def.name = `${def.name} (CPU)`;
-      this.teams.push({ def, index, snakes: [], cursor: 0, cpu, ammo: startingAmmo(), weapon: 'bazooka' });
+      const team: Team = { def, index, snakes: [], cursor: 0, cpu, ammo: startingAmmo(), weapon: 'bazooka' };
+      if (arena) {
+        const c = index === 0 ? arena.a : arena.b;
+        def.name = c.label.toUpperCase().slice(0, 18);
+        team.clanker = { label: c.label, model: c.model, provider: c.provider };
+        // Interactive flight tools need frame-by-frame steering a turn-based model cannot do.
+        team.ammo.set('jetpack', 0);
+        team.ammo.set('vine', 0);
+        team.ammo.set('surrender', 0);
+      }
+      this.teams.push(team);
     });
     const outfits = [...theme.outfits];
     let k = 0;
@@ -157,7 +176,12 @@ export class Game implements World, ProjWorld, EntWorld {
       for (const spot of this.terrain.findSpawns(4, 120, r, [...used, ...this.props])) this.props.push(new Prop('barrel', spot.x, spot.y - 7));
       for (const p of this.props) p.resting = true;
     }
-    for (const t of this.teams) if (t.cpu) this.brains.set(t, new CpuBrain(this, t, settings.brain));
+    for (const t of this.teams) {
+      if (!t.cpu) continue;
+      const brain = new CpuBrain(this, t, settings.brain);
+      brain.external = !!t.clanker;
+      this.brains.set(t, brain);
+    }
     this.teamTurn = r.int(0, this.teams.length - 1) - 1;
     this.nextTurn();
     if (this.active) {
@@ -222,7 +246,16 @@ export class Game implements World, ProjWorld, EntWorld {
   private nextTurn(): void {
     const alive = this.aliveTeams();
     if (alive.length <= 1) {
+      this.endReason = alive.length ? 'LAST TEAM STANDING' : 'MUTUAL DESTRUCTION';
       this.endGame(alive[0] ?? null);
+      return;
+    }
+    const cap = this.settings.maxTurns ?? 0;
+    if (cap > 0 && this.turnCount >= cap) {
+      const hp = alive.map((t) => ({ t, hp: t.snakes.reduce((a, s) => a + (s.alive ? s.hp : 0), 0) })).sort((a, b) => b.hp - a.hp);
+      const tie = hp.length > 1 && hp[0]!.hp === hp[1]!.hp;
+      this.endReason = tie ? `TURN LIMIT (${cap}): TIED ON HP` : `TURN LIMIT (${cap}): MOST HP WINS`;
+      this.endGame(tie ? null : hp[0]!.t);
       return;
     }
     this.turnCount++;
@@ -410,6 +443,8 @@ export class Game implements World, ProjWorld, EntWorld {
   }
 
   explode(x: number, y: number, radius: number, damage: number, knock: number): void {
+    this.blastLog.push({ turn: this.turnCount, x, y, r: radius });
+    if (this.blastLog.length > 300) this.blastLog.shift();
     const debris = this.terrain.carve(x, y, radius);
     this.particles.explosion(x, y, radius, debris);
     sfx.explosion(radius);
@@ -1037,7 +1072,7 @@ export class Game implements World, ProjWorld, EntWorld {
 
   private globalKeys(): void {
     const inp = this.input;
-    if (inp.pressed('pause') && this.phase !== 'over') {
+    if (inp.pressed('pause') && this.phase !== 'over' && this.settings.mode !== 'arena') {
       if (this.menuOpen && this.humanTurn) this.menuOpen = false;
       else if (this.cursorMode && this.humanTurn) this.cursorMode = false;
       else {
@@ -1135,7 +1170,7 @@ export class Game implements World, ProjWorld, EntWorld {
         }
         break;
       case 'play': {
-        if (!this.menuOpen || this.active?.team.cpu) this.turnT--;
+        if ((!this.menuOpen || this.active?.team.cpu) && !this.holdClock) this.turnT--;
         const sec = Math.ceil(this.turnT / 60);
         if (sec <= 5 && sec >= 1 && sec < this.lastBeepSec) {
           this.lastBeepSec = sec;
@@ -1161,7 +1196,11 @@ export class Game implements World, ProjWorld, EntWorld {
       case 'settle':
         if (this.phaseT >= 30 && this.allSettled()) this.startDamage();
         else if (this.phaseT > 900 && this.projectiles.length === 0) this.startDamage();
-        else if (this.phaseT > 720) {
+        else if (this.phaseT > 1200) {
+          // Last-resort safety net: nothing may ever hang a turn.
+          for (const p of this.projectiles) p.alive = false;
+          this.projectiles = [];
+        } else if (this.phaseT > 720) {
           for (const s of this.snakes) if (s.state === 'air') s.forceGround();
           for (const p of this.props) if (!p.sinking) {
             p.resting = true;
@@ -1215,7 +1254,9 @@ export class Game implements World, ProjWorld, EntWorld {
           }
         }
         if (this.phaseT > 90) {
-          if (this.input.pressed('confirm')) this.onExit?.('restart');
+          if (this.settings.mode === 'arena') {
+            if (this.input.pressed('back')) this.onExit?.('menu');
+          } else if (this.input.pressed('confirm')) this.onExit?.('restart');
           else if (this.input.pressed('back')) this.onExit?.('menu');
         }
         break;
@@ -1242,6 +1283,8 @@ export class Game implements World, ProjWorld, EntWorld {
     this.feed = this.feed.filter((m) => m.life > 0);
     for (const b of this.banners) b.life--;
     this.banners = this.banners.filter((b) => b.life > 0);
+    for (const gh of this.ghosts) gh.life--;
+    this.ghosts = this.ghosts.filter((gh) => gh.life > 0);
     if (this.arrowT > 0) this.arrowT--;
     this.updateCamera();
     this.cpuPad.endTick();

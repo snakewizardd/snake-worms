@@ -1,7 +1,29 @@
 import type { ThemeId } from './themes.ts';
 
-export type Mode = 'cpu' | 'hotseat' | 'watch';
+export type Mode = 'cpu' | 'hotseat' | 'watch' | 'arena';
 export type Brain = 'easy' | 'normal' | 'hard' | 'troll';
+
+export interface ClankerSetup {
+  /** Adapter id, e.g. 'copilot' or 'mock'. */
+  provider: string;
+  model: string;
+  label: string;
+  effort?: string;
+}
+
+export interface ArenaSetup {
+  a: ClankerSetup;
+  b: ClankerSetup;
+  /** Max oracle calls (find_shots + simulate) per turn. */
+  toolBudget: number;
+  /** Seconds a model may think per turn before it forfeits the turn. */
+  thinkSeconds: number;
+  record: boolean;
+  /** Ends the match (decided on HP) once both models together have used this many AI credits. 0 = no cap. */
+  costCap?: number;
+  /** "player" = plays like a human (aim guide + physics rules). "oracle" = may use the engine's shot solver. */
+  style?: 'player' | 'oracle';
+}
 
 export interface Settings {
   theme: ThemeId | 'random';
@@ -17,6 +39,9 @@ export interface Settings {
   banter: boolean;
   suddenDeath: number;
   edgeScroll: boolean;
+  /** 0 = unlimited. When reached, the team with more total HP wins. */
+  maxTurns?: number;
+  arena?: ArenaSetup;
 }
 
 export const DEFAULTS: Settings = {

@@ -9,20 +9,70 @@ import type { Team, World } from './snake.ts';
 import type { Terrain } from './terrain.ts';
 import { THEMES, THEME_ORDER } from './themes.ts';
 import type { ThemeDef, ThemeId } from './themes.ts';
-import type { Brain, Mode, Settings } from './settings.ts';
+import type { Brain, ClankerSetup, Mode, Settings } from './settings.ts';
+import { arenaAvailable, cachedModels, requestModels } from './arena/wsLink.ts';
+import type { ModelChoice } from './arena/link.ts';
 import { saveSettings } from './settings.ts';
 import { startingAmmo } from './weapons.ts';
 import { line } from './banter.ts';
 import { rng, TAU } from './util.ts';
 
-export const VERSION = 'v1.0';
+export const VERSION = 'v1.1';
 const GROUND = 252;
 const flatTerrain = {
   solid: (_x: number, y: number) => y >= GROUND,
   circleHit: () => ({ hit: false, nx: 0, ny: 0 }),
 } as unknown as Terrain;
 
-type Screen = 'title' | 'main' | 'setup' | 'howto';
+interface ArenaPrefs {
+  a: ClankerSetup;
+  b: ClankerSetup;
+  theme: ThemeId | 'random';
+  snakes: number;
+  toolBudget: number;
+  thinkSeconds: number;
+  maxTurns: number;
+  suddenDeath: number;
+  record: boolean;
+  costCap?: number;
+  style?: 'player' | 'oracle';
+}
+
+const ARENA_KEY = 'snakes.arena.v2';
+const ARENA_DEFAULTS: ArenaPrefs = {
+  a: { provider: 'copilot', model: 'claude-fable-5.1', label: 'CLAUDE FABLE 5.1', effort: '' },
+  b: { provider: 'copilot', model: 'gpt-6-astra', label: 'GPT-6 ASTRA', effort: '' },
+  theme: 'island',
+  snakes: 2,
+  toolBudget: 4,
+  thinkSeconds: 180,
+  maxTurns: 16,
+  suddenDeath: 6,
+  record: true,
+  costCap: 800,
+  style: 'player',
+};
+
+function loadArenaPrefs(): ArenaPrefs {
+  try {
+    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(ARENA_KEY) : null;
+    return raw ? { ...ARENA_DEFAULTS, ...(JSON.parse(raw) as Partial<ArenaPrefs>) } : structuredClone(ARENA_DEFAULTS);
+  } catch {
+    return structuredClone(ARENA_DEFAULTS);
+  }
+}
+
+function saveArenaPrefs(p: ArenaPrefs): void {
+  try {
+    localStorage.setItem(ARENA_KEY, JSON.stringify(p));
+  } catch {
+    // Non-persistent storage is fine.
+  }
+}
+
+export type { ModelChoice };
+
+type Screen = 'title' | 'main' | 'setup' | 'howto' | 'arena';
 export type FrontResult = { start: Settings } | null;
 
 interface Row {
@@ -50,8 +100,103 @@ export class Front {
     this.input = input;
     this.settings = settings;
     this.screen = screen;
+    this.arena = loadArenaPrefs();
     this.world = { terrain: flatTerrain, particles: new Particles(), onLand: () => {}, onDrown: () => {} };
     this.setTheme(settings.theme === 'random' ? rng.pick(THEME_ORDER) : settings.theme);
+    requestModels((_m, err) => (this.modelsError = err));
+  }
+
+  private arena: ArenaPrefs;
+  private modelsError = '';
+
+  // ------------------------------------------------------------------ live clanker arena setup
+
+  private arenaRows(): Row[] {
+    const p = this.arena;
+    const models = cachedModels();
+    const cyc = <T,>(list: T[], cur: T, dir: number): T => list[(list.indexOf(cur) + dir + list.length) % list.length]!;
+    const pick = (c: ClankerSetup, dir: number): void => {
+      if (!models.length) return;
+      const i = models.findIndex((m) => m.id === c.model && m.provider === c.provider);
+      const m = models[(i + dir + models.length) % models.length]!;
+      c.provider = m.provider;
+      c.model = m.id;
+      c.label = m.label;
+    };
+    const efforts = ['', 'low', 'medium', 'high'];
+    const themes: Array<ThemeId | 'random'> = [...THEME_ORDER, 'random'];
+    const show = (c: ClankerSetup): string => (models.length ? c.label : 'LOADING MODELS...');
+    return [
+      { label: 'CLANKER A', value: () => show(p.a), change: (d) => pick(p.a, d) },
+      { label: 'A REASONING', value: () => (p.a.effort || 'MODEL DEFAULT').toUpperCase(), change: (d) => (p.a.effort = cyc(efforts, p.a.effort ?? '', d)) },
+      { label: 'CLANKER B', value: () => show(p.b), change: (d) => pick(p.b, d) },
+      { label: 'B REASONING', value: () => (p.b.effort || 'MODEL DEFAULT').toUpperCase(), change: (d) => (p.b.effort = cyc(efforts, p.b.effort ?? '', d)) },
+      { label: 'PLAY STYLE', value: () => ((p.style ?? 'player') === 'player' ? 'REAL PLAYER (NO SOLVER)' : 'FULL ORACLE (SOLVER)'), change: () => (p.style = (p.style ?? 'player') === 'player' ? 'oracle' : 'player') },
+      { label: 'WORLD', value: () => (p.theme === 'random' ? 'RANDOM' : THEMES[p.theme].name), change: (d) => {
+        p.theme = cyc(themes, p.theme, d);
+        this.setTheme(p.theme === 'random' ? rng.pick(THEME_ORDER) : p.theme);
+      } },
+      { label: 'SNAKES PER TEAM', value: () => String(p.snakes), change: (d) => (p.snakes = cyc([1, 2, 3, 4], p.snakes, d)) },
+      { label: (p.style ?? 'player') === 'player' ? 'AIM CHECKS / TURN' : 'ORACLE CALLS / TURN', value: () => String(p.toolBudget), change: (d) => (p.toolBudget = cyc([2, 3, 4, 6, 8, 12], p.toolBudget, d)) },
+      { label: 'THINK LIMIT / TURN', value: () => `${p.thinkSeconds} SEC`, change: (d) => (p.thinkSeconds = cyc([45, 60, 90, 120, 180, 240], p.thinkSeconds, d)) },
+      { label: 'MAX TURNS (THEN MOST HP)', value: () => String(p.maxTurns), change: (d) => (p.maxTurns = cyc([4, 10, 20, 30, 40, 60], p.maxTurns, d)) },
+      { label: 'SUDDEN DEATH FROM ROUND', value: () => String(p.suddenDeath), change: (d) => (p.suddenDeath = cyc([4, 6, 8, 12], p.suddenDeath, d)) },
+      { label: 'RECORD BROADCAST VIDEO', value: () => (p.record ? 'ON' : 'OFF'), change: () => (p.record = !p.record) },
+      { label: 'BUDGET CAP (AI CREDITS)', value: () => (p.costCap ? String(p.costCap) : 'NONE'), change: (d) => (p.costCap = cyc([0, 10, 25, 100, 200, 400, 800, 1200], p.costCap ?? 0, d)) },
+      { label: 'START LIVE MATCH', value: () => '', start: true },
+    ];
+  }
+
+  private startArena(): FrontResult {
+    const p = this.arena;
+    if (!cachedModels().length) return null;
+    saveArenaPrefs(p);
+    sfx.blip();
+    const s: Settings = {
+      ...this.settings,
+      mode: 'arena',
+      theme: p.theme,
+      snakesPerTeam: p.snakes,
+      suddenDeath: p.suddenDeath,
+      maxTurns: p.maxTurns,
+      turnSeconds: 45,
+      startHp: 100,
+      crates: true,
+      hazards: true,
+      banter: true,
+      teamName: '',
+      arena: { a: { ...p.a }, b: { ...p.b }, toolBudget: p.toolBudget, thinkSeconds: p.thinkSeconds, record: p.record, costCap: p.costCap ?? 0, style: p.style ?? 'player' },
+    };
+    return { start: s };
+  }
+
+  private drawArena(ctx: CanvasRenderingContext2D): void {
+    ctx.fillStyle = 'rgba(6,8,24,0.78)';
+    ctx.fillRect(10, 8, 370, VIEW_H - 16);
+    drawText(ctx, 'LIVE CLANKER ARENA', 195, 14, { scale: 2, align: 'center', color: '#ffe14d' });
+    this.rows().forEach((row, i) => {
+      const y = 36 + i * 21;
+      const sel = i === this.sel;
+      if (sel) {
+        ctx.fillStyle = 'rgba(255,225,77,0.18)';
+        ctx.fillRect(14, y - 4, 362, 17);
+      }
+      if (row.start) drawText(ctx, sel ? '> START LIVE MATCH <' : 'START LIVE MATCH', 195, y - 1, { scale: 2, align: 'center', color: sel ? '#7dff7d' : '#ffffff' });
+      else {
+        drawText(ctx, row.label, 20, y, { color: sel ? '#ffe14d' : '#9fb0d8' });
+        drawText(ctx, `< ${row.value()} >`, 370, y, { align: 'right', color: '#ffffff' });
+      }
+      this.rects.push({ x: 14, y: y - 4, w: 362, h: 17, i });
+    });
+    const real = [this.arena.a, this.arena.b].some((c) => c.provider === 'copilot');
+    const note = this.modelsError ? `COPILOT UNAVAILABLE: ${this.modelsError}` : real ? 'REAL MODELS: EVERY TURN USES YOUR COPILOT ALLOWANCE' : 'MOCK PLAYERS: FREE, FOR TESTING';
+    drawText(ctx, note.slice(0, 60), 195, VIEW_H - 22, { align: 'center', color: real ? '#ff9a6a' : '#7dff7d' });
+    const desc = (c: ClankerSetup): string => cachedModels().find((m) => m.id === c.model)?.note ?? '';
+    drawText(ctx, this.arena.a.label, VIEW_W - 150, 40, { scale: 2, align: 'center', color: this.theme.teams[0].light });
+    drawText(ctx, 'VS', VIEW_W - 150, 62, { scale: 2, align: 'center' });
+    drawText(ctx, this.arena.b.label, VIEW_W - 150, 84, { scale: 2, align: 'center', color: this.theme.teams[1].light });
+    const d = desc(this.arena.a) || desc(this.arena.b);
+    if (d) drawText(ctx, d.toUpperCase().slice(0, 40), VIEW_W - 150, 108, { align: 'center', color: '#9fa8c8' });
   }
 
   private setTheme(id: ThemeId): void {
@@ -74,6 +219,10 @@ export class Front {
   }
 
   private rows(): Row[] {
+    return this.screen === 'arena' ? this.arenaRows() : this.setupRows();
+  }
+
+  private setupRows(): Row[] {
     const s = this.settings;
     const cyc = <T,>(list: T[], cur: T, dir: number): T => list[(list.indexOf(cur) + dir + list.length) % list.length]!;
     const themes: Array<ThemeId | 'random'> = [...THEME_ORDER, 'random'];
@@ -85,7 +234,7 @@ export class Front {
         s.theme = cyc(themes, s.theme, d);
         this.setTheme(s.theme === 'random' ? rng.pick(THEME_ORDER) : s.theme);
       } },
-      { label: 'MODE', value: () => ({ cpu: 'VS CPU', hotseat: 'HOTSEAT (2 PLAYERS)', watch: 'CPU VS CPU (WATCH)' })[s.mode], change: (d) => (s.mode = cyc(modes, s.mode, d)) },
+      { label: 'MODE', value: () => ({ cpu: 'VS CPU', hotseat: 'HOTSEAT (2 PLAYERS)', watch: 'CPU VS CPU (WATCH)', arena: 'VS CPU' })[s.mode], change: (d) => (s.mode = cyc(modes, s.mode === 'arena' ? 'cpu' : s.mode, d)) },
       { label: 'CPU BRAIN', value: () => ({ easy: 'EASY', normal: 'NORMAL', hard: 'HARD', troll: 'TROLL (MAXIMUM DISRESPECT)' })[s.brain], change: (d) => (s.brain = cyc(brains, s.brain, d)) },
       { label: 'YOUR TEAM NAME', value: () => (s.teamName || this.theme.teams[0].name) + (this.rowIs('YOUR TEAM NAME') && this.t % 40 < 20 ? '_' : ''), text: true },
       { label: 'SNAKES PER TEAM', value: () => String(s.snakesPerTeam), change: (d) => (s.snakesPerTeam = cyc([1, 2, 3, 4], s.snakesPerTeam, d)) },
@@ -111,13 +260,17 @@ export class Front {
   }
 
   private mainItems(): string[] {
-    return ['PLAY VS CPU', 'MATCH SETUP', 'HOTSEAT (2 PLAYERS)', 'WATCH CPU VS CPU', 'HOW TO PLAY'];
+    const items = ['PLAY VS CPU', 'MATCH SETUP', 'HOTSEAT (2 PLAYERS)', 'WATCH CPU VS CPU'];
+    if (arenaAvailable()) items.push('LIVE CLANKER ARENA');
+    items.push('HOW TO PLAY');
+    return items;
   }
 
   private go(screen: Screen): void {
     this.screen = screen;
     this.sel = 0;
     sfx.blip();
+    if (screen === 'arena') this.setTheme(this.arena.theme === 'random' ? rng.pick(THEME_ORDER) : this.arena.theme);
   }
 
   private start(mode?: Mode): FrontResult {
@@ -148,28 +301,32 @@ export class Front {
       return null;
     }
     if (this.screen === 'main') {
-      switch (this.sel) {
-        case 0:
+      switch (this.mainItems()[this.sel]) {
+        case 'PLAY VS CPU':
           return this.start('cpu');
-        case 1:
+        case 'MATCH SETUP':
           this.go('setup');
           return null;
-        case 2:
+        case 'HOTSEAT (2 PLAYERS)':
           return this.start('hotseat');
-        case 3:
+        case 'WATCH CPU VS CPU':
           return this.start('watch');
-        case 4:
+        case 'LIVE CLANKER ARENA':
+          this.go('arena');
+          return null;
+        case 'HOW TO PLAY':
           this.go('howto');
           return null;
       }
       return null;
     }
     const row = this.rows()[this.sel]!;
-    if (row.start) return this.start();
+    if (row.start) return this.screen === 'arena' ? this.startArena() : this.start();
     if (row.change) {
       row.change(dir);
       sfx.blip();
-      saveSettings(this.settings);
+      if (this.screen === 'arena') saveArenaPrefs(this.arena);
+      else saveSettings(this.settings);
     }
     return null;
   }
@@ -226,7 +383,7 @@ export class Front {
       this.sel = (this.sel + 1) % n;
       sfx.countTick();
     }
-    if (this.screen === 'setup') {
+    if (this.screen === 'setup' || this.screen === 'arena') {
       if (inp.pressed('left')) return this.activate(-1);
       if (inp.pressed('right')) return this.activate(1);
       const row = this.rows()[this.sel]!;
@@ -245,7 +402,7 @@ export class Front {
     bd.drawBack(ctx, WORLD_W / 2, 540, this.t);
     bd.drawWaterBack(ctx, WORLD_W / 2, 540, this.t);
     bd.drawWaterFront(ctx, WORLD_W / 2, 540, this.t);
-    const cx = this.screen === 'setup' ? VIEW_W - 150 : VIEW_W / 2;
+    const cx = this.screen === 'setup' || this.screen === 'arena' ? VIEW_W - 150 : VIEW_W / 2;
     this.drawIsland(ctx, cx);
     bd.drawWaterFrontLow(ctx, WORLD_W / 2, 540, this.t);
     this.snakes[0]!.x = cx - 34;
@@ -271,6 +428,7 @@ export class Front {
     if (this.screen === 'title') this.drawTitle(ctx);
     else if (this.screen === 'main') this.drawMain(ctx);
     else if (this.screen === 'setup') this.drawSetup(ctx);
+    else if (this.screen === 'arena') this.drawArena(ctx);
     else this.drawHowTo(ctx);
     bd.drawMotes(ctx);
     drawText(ctx, VERSION, VIEW_W - 6, VIEW_H - 12, { align: 'right', color: '#8888aa' });

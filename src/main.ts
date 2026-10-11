@@ -10,6 +10,17 @@ import type { Settings } from './settings.ts';
 import { THEMES, THEME_ORDER } from './themes.ts';
 import { MENU_ROWS } from './weapons.ts';
 import { rng } from './util.ts';
+import { arenaAvailable } from './arena/wsLink.ts';
+
+type ArenaModule = typeof import('./arena/run.ts');
+let arenaMod: ArenaModule | null = null;
+// Only exists under `npm run arena`; the production build drops this branch (and the whole arena runtime).
+if (import.meta.env.MODE === 'arena') {
+  void import('./arena/run.ts').then((m) => {
+    arenaMod = m;
+    m.resizeBroadcast();
+  });
+}
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 canvas.width = VIEW_W;
@@ -21,6 +32,7 @@ function resize(): void {
   const fit = Math.min(window.innerWidth / VIEW_W, window.innerHeight / VIEW_H);
   canvas.style.width = `${Math.floor(VIEW_W * fit)}px`;
   canvas.style.height = `${Math.floor(VIEW_H * fit)}px`;
+  arenaMod?.resizeBroadcast();
 }
 window.addEventListener('resize', resize);
 resize();
@@ -52,6 +64,11 @@ function startMatch(s: Settings): void {
 }
 
 function exitGame(action: 'menu' | 'restart'): void {
+  if (arenaMod?.active()) {
+    if (arenaMod.blocking()) return;
+    arenaMod.leave();
+    action = 'menu';
+  }
   if (action === 'restart' && game) {
     startMatch({ ...game.settings });
     return;
@@ -92,13 +109,20 @@ function step(): void {
       startMatch(r.start);
     }
   } else if (scene === 'game' && game) {
-    game.update();
+    const g = game;
+    g.update();
+    // Leaving the match (menu/rematch) replaces or clears `game` during update.
+    if (game !== g) return;
     if (sfx.ctx?.state === 'running') sfx.startAmbience();
-    const cpuTurn = !!game.active && game.active.team.cpu && !game.paused;
+    if (arenaMod?.active()) {
+      arenaMod.tick(g);
+      return;
+    }
+    const cpuTurn = !!g.active && g.active.team.cpu && !g.paused;
     if (cpuTurn && input.isHeld('fire')) {
       input.endTick();
-      game.update();
-      game.update();
+      g.update();
+      if (game === g) g.update();
     }
   }
 }
@@ -115,10 +139,14 @@ function draw(): void {
       game.onExit = exitGame;
       expose.game = game;
       front = null;
+      if (pending.mode === 'arena' && pending.arena && arenaAvailable() && arenaMod) arenaMod.begin(game, pending, canvas);
       pending = null;
       scene = 'game';
     }
-  } else if (scene === 'game' && game) renderGame(ctx, game);
+  } else if (scene === 'game' && game) {
+    renderGame(ctx, game);
+    arenaMod?.draw(game, canvas);
+  }
 }
 
 // ---------------------------------------------------------------- mouse

@@ -1,9 +1,9 @@
-import { PHYS, WORLD_W } from './config.ts';
+import { AIM, PHYS, WORLD_W } from './config.ts';
 import { env } from './env.ts';
 import type { Game } from './game.ts';
 import type { Snake, Team, World } from './snake.ts';
 import { Snake as SnakeClass } from './snake.ts';
-import { Rocket, Sheep, Thrown } from './projectiles.ts';
+import { AirMissile, FallingSheep, Piano, Rocket, Sheep, Thrown } from './projectiles.ts';
 import type { Projectile, ProjWorld } from './projectiles.ts';
 import type { Brain } from './settings.ts';
 import { WEAPON_BY_ID } from './weapons.ts';
@@ -58,7 +58,7 @@ class SimWorld implements ProjWorld {
   }
 }
 
-interface Plan {
+export interface Plan {
   weapon: WeaponId;
   facing: 1 | -1;
   aim: number;
@@ -72,6 +72,26 @@ interface Plan {
   walk?: number;
   girderAngle?: number;
   say?: string;
+  /** Externally chosen retreat after attacking (clankers). */
+  retreat?: 'auto' | 'left' | 'right' | 'stay';
+}
+
+export interface Effect {
+  snake: Snake;
+  damage: number;
+  drowns: boolean;
+  lethal: boolean;
+  enemy: boolean;
+}
+
+export interface Prediction {
+  score: number;
+  impactX: number;
+  impactY: number;
+  effects: Effect[];
+  note?: string;
+  /** Sampled flight path of the main projectile (x0,y0,x1,y1,...) for on-screen previews. */
+  path?: number[];
 }
 
 const NOISE: Record<Brain, { aim: number; power: number }> = {
@@ -84,6 +104,11 @@ const FUNNY: WeaponId[] = ['sheep', 'sheepRain', 'piano', 'holyEgg', 'melon', 's
 
 function gauss(): number {
   return (rng.next() + rng.next() + rng.next() - 1.5) / 1.5;
+}
+
+/** The power meter fills in steps of 1/chargeTicks; this is the power a charged shot actually fires with. */
+export function snapPower(p: number): number {
+  return Math.max(1, Math.min(AIM.chargeTicks, Math.round(p * AIM.chargeTicks))) / AIM.chargeTicks;
 }
 
 export class CpuBrain {
@@ -100,11 +125,28 @@ export class CpuBrain {
   private stuck = 0;
   private skyLaunched = false;
   private retreatDir = 0;
+  /** When true the brain never plans on its own; it only executes plans handed to executePlan (live clankers). */
+  external = false;
 
   constructor(g: Game, team: Team, level: Brain) {
     this.g = g;
     this.team = team;
     this.level = level;
+  }
+
+  /** Runs an externally chosen plan through the same legal controls the CPU uses. */
+  executePlan(plan: Plan): void {
+    this.plan = plan;
+    this.stage = 'menu';
+    this.t = 0;
+    this.retreatDir = 0;
+    this.skyLaunched = false;
+    if (this.s) this.lastX = this.s.x;
+    this.stuck = 0;
+  }
+
+  get busy(): boolean {
+    return this.stage !== 'wait' && this.stage !== 'done';
   }
 
   beginTurn(s: Snake): void {
@@ -116,6 +158,7 @@ export class CpuBrain {
     this.rethinks = 0;
     this.skyLaunched = false;
     this.retreatDir = 0;
+    if (this.external) return;
     if (this.level === 'troll') this.g.bubble(s, line('turn', this.g.theme, true));
     else if (rng.chance(0.45)) this.g.bubble(s, line('cpuThink', this.g.theme), 100);
   }
@@ -136,6 +179,7 @@ export class CpuBrain {
     }
     switch (this.stage) {
       case 'wait':
+        if (this.external) break;
         if (this.t > 20 && g.phase === 'play') {
           this.stage = 'think';
           this.thinker = this.think();
@@ -243,7 +287,8 @@ export class CpuBrain {
       case 'charge':
         if (this.t < 4) break;
         if (!g.charging) pad.hold('fire', true);
-        else if (g.power >= this.plan!.power - 0.008) {
+        // The meter rises one step during the tick we release on, so let go one step early to fire at exactly plan.power.
+        else if (g.power + 1 / AIM.chargeTicks >= this.plan!.power - 0.004) {
           pad.hold('fire', false);
           this.stage = 'done';
         }
@@ -264,6 +309,7 @@ export class CpuBrain {
         if (this.t > 10 && this.plan!.weapon !== 'shotgun') this.stage = 'done';
         break;
       case 'done':
+        if (this.external) break;
         if (g.phase === 'play' && this.t > 240 && g.turnT > 120) {
           this.stage = 'think';
           this.thinker = this.think();
@@ -323,6 +369,9 @@ export class CpuBrain {
       const dist = Math.hypot(p.impactX - s.x, p.impactY - s.y);
       const danger = p.weapon === 'dynamite' || p.weapon === 'mine' || dist < 70;
       this.retreatDir = danger ? (p.weapon === 'dynamite' || p.weapon === 'mine' ? -s.facing : s.x >= p.impactX ? 1 : -1) : 2;
+      if (p.retreat === 'left') this.retreatDir = -1;
+      else if (p.retreat === 'right') this.retreatDir = 1;
+      else if (p.retreat === 'stay') this.retreatDir = 2;
       this.t = 0;
       this.lastX = s.x;
     }
@@ -367,20 +416,33 @@ export class CpuBrain {
   private drowns(target: Snake, ix: number, iy: number): boolean {
     const clone = new SnakeClass(target.team, target.name, target.x, target.y, target.hp);
     let drowned = false;
+    let fall = 0;
     const w: World = {
       terrain: this.g.terrain,
       particles: SIM_PARTICLES,
-      onLand: () => {},
+      onLand: (_s, impact) => {
+        if (impact > PHYS.fallDamageSpeed) fall += Math.round((impact - PHYS.fallDamageSpeed) * PHYS.fallDamagePerSpeed) + 2;
+      },
       onDrown: () => {
         drowned = true;
       },
     };
     clone.knock(ix, iy);
     for (let i = 0; i < 260 && clone.state === 'air'; i++) clone.update(w);
+    this.lastFall = fall;
     return drowned || clone.state === 'drown';
   }
 
+  /** Fall damage from the most recent drowns() flight simulation. */
+  private lastFall = 0;
+
   private score(w: SimWorld, self: Snake): { score: number; x: number; y: number } {
+    const a = this.analyze(w, self);
+    return { score: a.score, x: a.impactX, y: a.impactY };
+  }
+
+  /** Per-snake consequences of a simulated shot, using the same knockback and drowning physics as the game. */
+  private analyze(w: SimWorld, self: Snake): Prediction {
     const dmg = new Map<Snake, number>();
     const kx = new Map<Snake, [number, number]>();
     for (const b of w.blasts) {
@@ -406,18 +468,21 @@ export class CpuBrain {
     for (const f of w.flameSpots) for (const s of this.g.snakes) if (s.alive && Math.hypot(s.x - f.x, s.y - f.y) < 45) dmg.set(s, (dmg.get(s) ?? 0) + 14);
     for (const p of w.poisons) for (const s of this.g.snakes) if (s.alive && !s.poisoned && Math.hypot(s.x - p.x, s.y - p.y) < p.r) dmg.set(s, (dmg.get(s) ?? 0) + 18);
     let score = 0;
-    for (const [s, d] of dmg) {
+    const effects: Effect[] = [];
+    for (const [s, d0] of dmg) {
       const hp = s.hp - s.pendingDmg;
       const enemy = s.team !== this.team;
       const k = kx.get(s);
       const sea = k ? this.drowns(s, k[0], k[1]) : false;
+      const d = d0 + (k && !sea ? this.lastFall : 0);
       const lethal = d >= hp || sea;
       const real = sea ? hp : Math.min(d, hp);
+      effects.push({ snake: s, damage: Math.min(d, hp), drowns: sea, lethal, enemy });
       if (enemy) score += real + (lethal ? 45 : 0);
       else score -= (real + (lethal ? 80 : 0)) * (s === self ? 2.2 : 1.6);
     }
     const last = w.blasts[w.blasts.length - 1];
-    return { score, x: last?.x ?? self.x, y: last?.y ?? self.y };
+    return { score, impactX: last?.x ?? self.x, impactY: last?.y ?? self.y, effects };
   }
 
   private allowed(): WeaponId[] {
@@ -436,8 +501,15 @@ export class CpuBrain {
     if (!enemies.length) return null;
     const wind = this.level === 'easy' ? g.wind * 0.3 : g.wind;
     const weapons = this.allowed();
+    const cands = yield* this.gather(s, enemies, weapons, wind, this.level === 'hard');
+    while (g.tick - started < 40) yield;
+    return this.choose(cands, enemies);
+  }
+
+  /** Physics search over legal attacks against the given enemies; returns every positive-scoring candidate. */
+  *gather(s: Snake, enemies: Snake[], weapons: WeaponId[], wind: number, fine: boolean): Generator<void, Plan[]> {
+    const g = this.g;
     const cands: Plan[] = [];
-    const fine = this.level === 'hard';
     let budget = performance.now();
     const breathe = function* (): Generator<void, void> {
       if (performance.now() - budget > 4) {
@@ -547,8 +619,12 @@ export class CpuBrain {
       if (theirs > mine + 80 || this.level === 'troll') cands.push({ weapon: 'doomsday', facing: s.facing, aim: 0, power: 0, fuse: 3, tx: 0, ty: 0, score: 38, impactX: -999, impactY: -999 });
     }
 
-    while (g.tick - started < 40) yield;
+    return cands;
+  }
 
+  private choose(cands: Plan[], enemies: Snake[]): Plan | null {
+    const g = this.g;
+    const s = this.s!;
     cands.sort((a, b) => b.score - a.score);
     let pick = cands[0] ?? null;
     if (this.level === 'troll' && pick) {
@@ -581,6 +657,194 @@ export class CpuBrain {
     }
     if (out.tx) out.tx += gauss() * n.aim * 160;
     return out;
+  }
+
+  // ------------------------------------------------------------------ oracle API (live clanker tools)
+
+  /** Top physics-searched attacks for snake s, optionally limited to weapons and/or one target. */
+  *search(s: Snake, weapons: WeaponId[], targetId: string | null): Generator<void, Plan[]> {
+    this.s = s;
+    let enemies = this.g.snakes.filter((o) => o.alive && o.hp > 0 && o.team !== this.team);
+    if (targetId) enemies = enemies.filter((e) => e.name === targetId);
+    if (!enemies.length) return [];
+    const usable = weapons.filter((id) => this.g.isAvailable(id, this.team));
+    const cands = yield* this.gather(s, enemies, usable, this.g.wind, true);
+    cands.sort((a, b) => b.score - a.score);
+    const out: Plan[] = [];
+    for (const c of cands) {
+      if (out.length >= 12) break;
+      if (out.some((o) => o.weapon === c.weapon && o.facing === c.facing && Math.abs(o.aim - c.aim) < 0.12 && Math.abs(o.power - c.power) < 0.1)) continue;
+      c.power = snapPower(c.power);
+      out.push(c);
+    }
+    return out;
+  }
+
+  /** When nothing hits: the shots whose impact lands closest to an enemy (so a model can see how far off it is). */
+  *nearMisses(s: Snake, weapons: WeaponId[]): Generator<void, Array<{ plan: Plan; miss: number; target: string }>> {
+    const g = this.g;
+    this.s = s;
+    const enemies = g.snakes.filter((o) => o.alive && o.hp > 0 && o.team !== this.team);
+    const out: Array<{ plan: Plan; miss: number; target: string }> = [];
+    let budget = performance.now();
+    const ids = weapons.filter((id) => (id === 'bazooka' || id === 'grenade') && g.isAvailable(id, this.team));
+    for (const id of ids) {
+      const def = WEAPON_BY_ID[id];
+      for (const facing of [1, -1] as const) {
+        for (let aim = -1.45; aim <= 0.5; aim += 0.09) {
+          for (let power = 0.3; power <= 1.0001; power += 0.07) {
+            const dx = Math.cos(aim) * facing;
+            const dy = Math.sin(aim);
+            const mx = s.x + dx * 11;
+            const my = s.y - 7 + dy * 11;
+            if (g.terrain.solid(mx, my)) continue;
+            const pw = snapPower(power);
+            const v = pw * (def.maxSpeed ?? 10);
+            const p = id === 'bazooka' ? new Rocket(mx, my, dx * v, dy * v, s, 'rocket') : new Thrown(mx, my, dx * v, dy * v, s, 'grenade', 3);
+            sfx.silent = true;
+            const w = this.simulate(p, g.wind, 420);
+            sfx.silent = false;
+            const b = w.blasts[w.blasts.length - 1];
+            if (b) {
+              let best = Infinity;
+              let who = '';
+              for (const e of enemies) {
+                const d = Math.hypot(e.x - b.x, e.y - b.y);
+                if (d < best) {
+                  best = d;
+                  who = e.name;
+                }
+              }
+              if (Math.hypot(s.x - b.x, s.y - b.y) > 45) out.push({ plan: { weapon: id, facing, aim, power: pw, fuse: 3, tx: 0, ty: 0, score: 0, impactX: b.x, impactY: b.y }, miss: Math.round(best), target: who });
+            }
+            if (performance.now() - budget > 4) {
+              yield;
+              budget = performance.now();
+            }
+          }
+        }
+      }
+    }
+    out.sort((a, b) => a.miss - b.miss);
+    const picked: typeof out = [];
+    for (const o of out) {
+      if (picked.length >= 3) break;
+      if (picked.some((p) => Math.hypot(p.plan.impactX - o.plan.impactX, p.plan.impactY - o.plan.impactY) < 30)) continue;
+      picked.push(o);
+    }
+    return picked;
+  }
+
+  /** Predicts the outcome of one exact plan for snake s without touching the real match. */
+  predict(s: Snake, plan: Plan): Prediction {
+    const g = this.g;
+    this.s = s;
+    const id = plan.weapon;
+    const dx = Math.cos(plan.aim) * plan.facing;
+    const dy = Math.sin(plan.aim);
+    const mx = s.x + dx * 11;
+    const my = s.y - 7 + dy * 11;
+    const def = WEAPON_BY_ID[id];
+    const v = Math.max(0.06, snapPower(plan.power)) * (def.maxSpeed ?? 10);
+    sfx.silent = true;
+    try {
+      const run = (projectiles: Projectile[], wind: number, ticks: number): Prediction => {
+        const w = new SimWorld(g, wind);
+        let list = projectiles;
+        const lead = projectiles[0];
+        const path: number[] = [];
+        for (let t = 0; t < ticks && list.length; t++) {
+          for (const q of list) q.update(w);
+          if (lead && lead.alive && t % 2 === 0 && path.length < 600) path.push(Math.round(lead.x), Math.round(lead.y));
+          list = list.filter((q) => q.alive).concat(w.spawned);
+          w.spawned = [];
+        }
+        if (lead) path.push(Math.round(lead.x), Math.round(lead.y));
+        const a = this.analyze(w, s);
+        a.path = path;
+        if (!w.blasts.length) a.note = 'NO EXPLOSION PREDICTED (FLEW OFF MAP, SANK, OR STILL TRAVELLING)';
+        return a;
+      };
+      switch (id) {
+        case 'bazooka':
+        case 'venom':
+          if (g.terrain.solid(mx, my)) return { score: 0, impactX: mx, impactY: my, effects: [], note: 'MUZZLE IS INSIDE TERRAIN: THIS SHOT HITS YOUR OWN FACE' };
+          return run([new Rocket(mx, my, dx * v, dy * v, s, id === 'bazooka' ? 'rocket' : 'venom')], g.wind, 420);
+        case 'homing':
+          return run([new Rocket(mx, my, dx * v, dy * v, s, 'homing', plan.tx, plan.ty)], g.wind, 420);
+        case 'grenade':
+        case 'cluster':
+        case 'melon':
+        case 'holyEgg':
+        case 'petrol':
+          return run([new Thrown(mx, my, dx * v, dy * v, s, id, id === 'holyEgg' ? 3 : plan.fuse)], g.wind, 480);
+        case 'dynamite':
+          return run([new Thrown(s.x + plan.facing * 6, s.y - 2, plan.facing * 0.6, -1.2, s, 'dynamite', 5)], 0, 400);
+        case 'sheep':
+        case 'skySheep':
+          return run([new Sheep(s.x + plan.facing * 9, s.y - 3, plan.facing, s, false)], 0, 480);
+        case 'airStrike': {
+          const list: Projectile[] = [];
+          for (let i = 0; i < 5; i++) list.push(new AirMissile(plan.tx + (i - 2) * 24 - plan.facing * 90, -40 - i * 14, plan.facing * 2.3, 4, s));
+          return run(list, g.wind, 420);
+        }
+        case 'sheepRain': {
+          const list: Projectile[] = [];
+          for (let i = 0; i < 6; i++) list.push(new FallingSheep(plan.tx + (i - 2.5) * 24, -30 - i * 28, 0, 1, s));
+          const p = run(list, 0, 480);
+          p.note = 'SHEEP LAND WITH SOME RANDOM SCATTER (+/-70PX)';
+          return p;
+        }
+        case 'piano':
+          return run([new Piano(plan.tx, -40, 0, 2, s)], 0, 600);
+        case 'shotgun': {
+          let x = mx;
+          let y = my;
+          for (let d = 0; d < 700; d += 2) {
+            x = mx + dx * d;
+            y = my + dy * d;
+            if (g.terrain.solid(x, y)) break;
+            if (g.snakes.some((o) => o !== s && o.alive && Math.hypot(o.x - x, o.y - 3 - y) < PHYS.snakeRadius + 1)) break;
+            if (y > env.waterY || x < -50 || x > WORLD_W + 50) break;
+          }
+          const w = new SimWorld(g, 0);
+          w.blasts.push({ x, y, r: 13, dmg: 25, knock: 3.5 }, { x, y, r: 13, dmg: 25, knock: 3.5 });
+          const p = this.analyze(w, s);
+          p.note = 'BOTH BARRELS AT THE SAME AIM';
+          return p;
+        }
+        case 'tailWhip': {
+          const effects: Effect[] = [];
+          let score = 0;
+          for (const o of g.snakes) {
+            if (o === s || !o.alive) continue;
+            const ddx = (o.x - s.x) * plan.facing;
+            if (ddx > -2 && ddx < 22 && Math.abs(o.y - s.y) < 14) {
+              const sea = this.drowns(o, plan.facing * 6.5, -4.5);
+              const hp = o.hp - o.pendingDmg;
+              const enemy = o.team !== this.team;
+              effects.push({ snake: o, damage: Math.min(25, hp), drowns: sea, lethal: sea || 25 >= hp, enemy });
+              score += (enemy ? 1 : -2) * (sea ? hp : Math.min(25, hp));
+            }
+          }
+          return { score, impactX: s.x + plan.facing * 12, impactY: s.y, effects, note: effects.length ? undefined : 'NOBODY IN SLAPPING RANGE (NEEDS TO BE WITHIN ~20PX IN FRONT)' };
+        }
+        case 'mine':
+          return { score: 0, impactX: s.x + plan.facing * 8, impactY: s.y, effects: [], note: 'MINE ARMS AFTER 2 SECONDS AND TRIGGERS WHEN ANY SNAKE COMES WITHIN ~26PX' };
+        case 'teleport': {
+          const ok = g.terrain.free(plan.tx, plan.ty, PHYS.snakeRadius + 1) && plan.ty < env.waterY - 10 && plan.ty > 5;
+          return { score: 0, impactX: plan.tx, impactY: plan.ty, effects: [], note: ok ? 'SPOT IS FREE: TELEPORT WILL SUCCEED, THEN YOU FALL TO THE GROUND BELOW' : 'SPOT IS BLOCKED OR UNDERWATER: TELEPORT WILL FAIL' };
+        }
+        case 'girder':
+          return { score: 0, impactX: plan.tx, impactY: plan.ty, effects: [], note: 'PLACES A 64PX STEEL BEAM AT THE TARGET' };
+        case 'doomsday':
+          return { score: 0, impactX: 0, impactY: 0, effects: [], note: 'UNPREDICTABLE: ~50 METEORS FALL RANDOMLY ACROSS THE WHOLE ISLAND FOR 8 SECONDS, INCLUDING ON YOU' };
+        default:
+          return { score: 0, impactX: s.x, impactY: s.y, effects: [], note: 'NO PREDICTION AVAILABLE FOR THIS WEAPON' };
+      }
+    } finally {
+      sfx.silent = false;
+    }
   }
 
   private exposed(e: Snake): boolean {

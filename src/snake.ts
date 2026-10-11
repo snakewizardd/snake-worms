@@ -17,6 +17,8 @@ export interface Team {
   cpu: boolean;
   ammo: Map<string, number>;
   weapon: string;
+  /** Set when a live LLM controls this team. */
+  clanker?: { label: string; model: string; provider: string };
 }
 
 export interface World {

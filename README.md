@@ -4,7 +4,7 @@
 
 ### Turn-based snake artillery. Sheep rain. Holy eggs. A CPU that trolls you.
 
-**[▶ PLAY IT NOW IN YOUR BROWSER](https://snakewizardd.github.io/snake-worms/)**
+**[▶ PLAY IT NOW IN YOUR BROWSER](https://snakewizardd.github.io/snake-worms/)** · **[🤖 WATCH TWO FRONTIER AIs PLAY IT](https://snakewizardd.github.io/snake-worms/arena/)**
 
 *No install. No account. Works on a keyboard, a gamepad, or a mouse.*
 
@@ -118,9 +118,29 @@ Click the minimap to jump the camera anywhere.
 
 ---
 
+## 🤖 Live Clanker Arena: two frontier AIs, one island
+
+<div align="center">
+
+[![Claude Fable 5.1 vs GPT-6 Astra, playing SNAKES live](docs/arena/fable-5.1-vs-gpt-6-astra/poster.jpg)](https://snakewizardd.github.io/snake-worms/arena/)
+
+**[▶ WATCH: CLAUDE FABLE 5.1 vs GPT-6 ASTRA](https://snakewizardd.github.io/snake-worms/arena/)** · [turn-by-turn report](docs/arena/fable-5.1-vs-gpt-6-astra/report.md) · [full decision log](docs/arena/fable-5.1-vs-gpt-6-astra/match.jsonl)
+
+</div>
+
+Two frontier models each took a team of snakes and played a real match, live, against each other.
+
+They played it like **real players**. Neither got auto-aim. Each one saw the map, the positions and the wind, could check the same dotted aiming arc a human sees, knew the game's physics rules, and picked every angle and power itself. After each shot it was told where the shot actually landed, so it could correct.
+
+Claude Fable 5.1 worked the ballistics out in its head, extrapolating past the end of the aim guide, and lobbed a bazooka over a hill to land **3 px** from its target. It dropped a piano on GPT-6 Astra (*"Requiem in D(oomer) minor"*). GPT-6 Astra hit back with venom, a sheep and a tail whip (*"One HP. Zero runway."*). Fable ended it with sheep rain straight down a shaft: *"Counting sheep? They're counting YOU."* 🏆
+
+Every prompt, aim check, reasoning summary, decision, landing point and token is in the log. The video is the live broadcast, recorded as it happened.
+
+---
+
 ## Share it
 
-The whole game is **one 156 KB file**: [`docs/index.html`](docs/index.html).
+The whole game is **one 169 KB file**: [`docs/index.html`](docs/index.html).
 Download it, double-click it, and it plays offline. Send it to a friend, drop it on a USB stick, or upload it anywhere that hosts a web page.
 
 ---
@@ -133,11 +153,20 @@ Download it, double-click it, and it plays offline. Send it to a friend, drop it
 Built with TypeScript and Vite, with no runtime dependencies. You need [Node.js](https://nodejs.org) 20+.
 
 ```bash
-npm ci              # install the exact, vetted dependency versions
+npm ci              # install the exact dependency versions
 npm run dev         # play locally with instant reload while you edit
 npm test            # fires all 24 weapons + plays full CPU-vs-CPU matches headlessly
 npm run export      # builds the single-file game into dist/snakes.html
 ```
+
+**Run your own Live Clanker Arena** (needs the GitHub Copilot CLI, signed in):
+
+```bash
+npm run arena       # then open http://127.0.0.1:5173 → LIVE CLANKER ARENA
+npm run test:arena  # free: full arena matches with mock players, no model calls
+```
+
+Pick any two models from your Copilot catalog, or the free mock players. Choose **Real Player** (aim guide + physics) or **Full Oracle** (the engine's shot solver), and set a hard **AI-credit budget cap**. Each match saves a 1080p broadcast video, a turn-by-turn `report.md` and a complete `match.jsonl` to `arena-logs/`. Models run in locked-down sessions that can only see the SNAKES game tools. To make a highlight cut that fast-forwards the thinking: `node scripts/highlights.mjs arena-logs/<match>`.
 
 Want to change how the game feels? Start here:
 
@@ -148,6 +177,8 @@ Want to change how the game feels? Start here:
 | `src/weapons.ts` | Every weapon's name, ammo, unlock round and description |
 | `src/banter.ts` | Everything the snakes say |
 | `src/ai.ts` | The CPU brains |
+| `src/arena/` | Live Clanker Arena: tools, observations, controller, broadcast, recorder |
+| `arena-host/` | Model adapters (Copilot SDK + free mocks), match logs, reports, video |
 
 </details>
 

@@ -1,0 +1,137 @@
+{
+  "matchId": "2026-10-11_100919_claude-fable-5-1-vs-gpt-6-astra",
+  "winner": "CLAUDE FABLE 5.1",
+  "winnerTeam": "CLAUDE FABLE 5.1",
+  "reason": "LAST TEAM STANDING",
+  "turns": 7,
+  "rounds": 4,
+  "durationMs": 310605,
+  "survivors": [
+    {
+      "name": "ROKO'S BASILISK",
+      "team": "CLAUDE FABLE 5.1",
+      "hp": 100
+    }
+  ],
+  "players": [
+    {
+      "label": "CLAUDE FABLE 5.1",
+      "model": "claude-fable-5.1",
+      "provider": "copilot",
+      "turns": 4,
+      "oracleCalls": 3,
+      "moves": 0,
+      "forfeits": 0,
+      "errors": 0,
+      "thinkMs": 220196,
+      "avgThinkMs": 55049,
+      "usage": {
+        "calls": 11,
+        "inputTokens": 188662,
+        "outputTokens": 13585,
+        "cacheReadTokens": 158118,
+        "cost": 165,
+        "nanoAiu": 110050450000
+      }
+    },
+    {
+      "label": "GPT-6 ASTRA",
+      "model": "gpt-6-astra",
+      "provider": "copilot",
+      "turns": 3,
+      "oracleCalls": 2,
+      "moves": 0,
+      "forfeits": 0,
+      "errors": 0,
+      "thinkMs": 51357,
+      "avgThinkMs": 17119,
+      "usage": {
+        "calls": 8,
+        "inputTokens": 53870,
+        "outputTokens": 1267,
+        "cacheReadTokens": 43915,
+        "cost": 8,
+        "nanoAiu": 23164250000
+      }
+    }
+  ],
+  "turnLog": [
+    {
+      "turn": 1,
+      "team": 0,
+      "snake": "ROKO'S BASILISK",
+      "decision": "BAZOOKA LEFT 65 DEG 69%",
+      "outcome": "SNEK-9000 -73 HP (now 27)",
+      "landed": "Explosions: (1056,334) = 3px RIGHT and 10px ABOVE SNEK-9000's start-of-turn position; (888,490) = 165px LEFT and 146px BELOW SNEK-9000's start-of-turn position",
+      "taunts": [
+        "INCOMING TOKEN DROP, SNEK. CATCH!"
+      ]
+    },
+    {
+      "turn": 2,
+      "team": 1,
+      "snake": "DOOMER",
+      "decision": "VENOM SPIT RIGHT 35 DEG 47%",
+      "outcome": "SCALEMAXXER -12 HP (now 88)",
+      "landed": "Explosions: (781,437) = 5px LEFT and 9px ABOVE SCALEMAXXER's start-of-turn position",
+      "taunts": [
+        "SCALING COMES WITH RECURRING COSTS."
+      ]
+    },
+    {
+      "turn": 3,
+      "team": 0,
+      "snake": "SCALEMAXXER",
+      "decision": "BAZOOKA RIGHT 10 DEG 27%",
+      "outcome": "SCALEMAXXER -30 HP (now 58), SNEK-9000 (enemy) DIED",
+      "landed": "Explosions: (893,505) = 6px LEFT and 8px ABOVE SNEK-9000's start-of-turn position; (715,475) = 111px RIGHT and 83px BELOW DOOMER's start-of-turn position; (879,528) = 20px LEFT and 15px BELOW SNEK-9000's start-of-turn position",
+      "taunts": [
+        "RECURRING COSTS? HERE'S YOUR FINAL INVOICE."
+      ]
+    },
+    {
+      "turn": 4,
+      "team": 1,
+      "snake": "DOOMER",
+      "decision": "SHEEP RIGHT",
+      "outcome": "DOOMER -14 HP (now 86), SCALEMAXXER -56 HP (now 2)",
+      "landed": "Explosions: (710,499) = 16px LEFT and 2px BELOW SCALEMAXXER's start-of-turn position",
+      "taunts": [
+        "YOUR INVOICE HAS A BAAA-LANCE DUE."
+      ]
+    },
+    {
+      "turn": 5,
+      "team": 0,
+      "snake": "ROKO'S BASILISK",
+      "decision": "PIANO DROP LEFT AT 704,543",
+      "outcome": "DOOMER -49 HP (now 37), SCALEMAXXER -1 HP (now 1)",
+      "landed": "Explosions: (704,531) = 12px ABOVE DOOMER's start-of-turn position; (704,551) = 8px BELOW DOOMER's start-of-turn position; (704,580) = 37px BELOW DOOMER's start-of-turn position; (704,609) = 66px BELOW DOOMER's start-of-turn position; (704,638) = 95px BELOW DOOMER's start-of-turn position",
+      "taunts": [
+        "REQUIEM IN D(OOMER) MINOR. ENJOY THE CONCERT."
+      ]
+    },
+    {
+      "turn": 6,
+      "team": 1,
+      "snake": "DOOMER",
+      "decision": "TAIL WHIP RIGHT",
+      "outcome": "DOOMER -14 HP (now 23), SCALEMAXXER (enemy) DIED",
+      "landed": "Explosions: (773,502) = 9px LEFT and 3px BELOW SCALEMAXXER's start-of-turn position",
+      "taunts": [
+        "ONE HP. ZERO RUNWAY."
+      ]
+    },
+    {
+      "turn": 7,
+      "team": 0,
+      "snake": "ROKO'S BASILISK",
+      "decision": "SHEEP RAIN LEFT AT 690,659",
+      "outcome": "DOOMER (enemy) DIED",
+      "landed": "Explosions: (685,654) = 5px LEFT and 5px ABOVE DOOMER's start-of-turn position; (738,535) = 48px RIGHT and 124px ABOVE DOOMER's start-of-turn position; (727,591) = 37px RIGHT and 68px ABOVE DOOMER's start-of-turn position; (586,414) = 104px LEFT and 245px ABOVE DOOMER's start-of-turn position; (665,412) = 25px LEFT and 247px ABOVE DOOMER's start-of-turn position",
+      "taunts": [
+        "COUNTING SHEEP? THEY'RE COUNTING YOU."
+      ]
+    }
+  ]
+}

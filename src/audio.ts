@@ -78,6 +78,18 @@ class Audio {
   private lastVoice = 0;
   private jet: { src: AudioBufferSourceNode; gain: GainNode } | null = null;
   private ambSrc: AudioScheduledSourceNode[] = [];
+  private out: AudioNode | null = null;
+  private tap: MediaStreamAudioDestinationNode | null = null;
+
+  /** Live copy of the final mix for recording (null until audio is unlocked). */
+  captureStream(): MediaStream | null {
+    if (!this.ctx || !this.out) return null;
+    if (!this.tap) {
+      this.tap = this.ctx.createMediaStreamDestination();
+      this.out.connect(this.tap);
+    }
+    return this.tap.stream;
+  }
   muted = false;
   /** Set while the CPU simulates shots so predictions make no noise. */
   silent = false;
@@ -95,6 +107,7 @@ class Audio {
       comp.threshold.value = -14;
       comp.ratio.value = 4;
       this.master.connect(comp).connect(ctx.destination);
+      this.out = comp;
       this.sfxBus = ctx.createGain();
       this.sfxBus.connect(this.master);
       this.musicBus = ctx.createGain();

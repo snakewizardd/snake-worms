@@ -80,7 +80,7 @@ for (const def of WEAPON_LIST) {
       }
     }
     let t = 0;
-    while (g.turnCount === turn && g.phase !== 'over' && t < 4500) {
+    while (g.turnCount === turn && (g.phase as string) !== 'over' && t < 4500) {
       if (id === 'jetpack' && s.state === 'jet') s.jetUp = t % 60 < 30;
       g.update();
       t++;
@@ -90,10 +90,10 @@ for (const def of WEAPON_LIST) {
     const carved = before - after;
     const offensive = !['teleport', 'girder', 'jetpack', 'vine', 'skip', 'surrender', 'mine'].includes(id);
     const problems: string[] = [];
-    if (g.turnCount === turn && g.phase !== 'over') problems.push('turn never ended');
+    if (g.turnCount === turn && (g.phase as string) !== 'over') problems.push('turn never ended');
     if (offensive && carved <= 0 && hpAfter >= hpBefore) problems.push('no terrain destroyed and no damage');
     if (id === 'girder' && carved >= 0) problems.push('girder added no terrain');
-    if (id === 'surrender' && g.phase !== 'over') problems.push('surrender did not end match');
+    if (id === 'surrender' && (g.phase as string) !== 'over') problems.push('surrender did not end match');
     if (note.includes('NOT') || note.includes('NO ') || note.includes('DID NOT')) problems.push(note);
     if (problems.length) {
       failures++;

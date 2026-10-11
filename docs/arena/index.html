@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SNAKES Live Clanker Arena: Claude Fable 5.1 vs GPT-6 Astra</title>
+    <meta name="description" content="Two frontier AIs played a Worms-style artillery game live, aiming every shot themselves. Watch the full match, every decision logged." />
+    <meta property="og:title" content="Claude Fable 5.1 vs GPT-6 Astra: live in SNAKES" />
+    <meta property="og:description" content="Two frontier AIs played a Worms-style artillery game live, aiming every shot themselves. No auto-aim. Every decision logged." />
+    <meta property="og:image" content="https://snakewizardd.github.io/snake-worms/arena/fable-5.1-vs-gpt-6-astra/poster.jpg" />
+    <meta property="og:url" content="https://snakewizardd.github.io/snake-worms/arena/" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐍</text></svg>" />
+    <style>
+      :root { --bg: #07081a; --panel: #10132e; --line: #2a2f66; --text: #e6e9ff; --dim: #8f97c8; --gold: #ffe14d; --red: #ff8a7a; --teal: #6ff0e3; --green: #7dff7d; }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.55 ui-monospace, 'Cascadia Mono', Consolas, Menlo, monospace; }
+      main { max-width: 1180px; margin: 0 auto; padding: 28px 18px 60px; }
+      a { color: var(--teal); }
+      header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 14px 22px; margin-bottom: 18px; }
+      header .logo { font-size: 30px; font-weight: 800; letter-spacing: 3px; color: #4bf6ff; text-decoration: none; }
+      header .tag { color: var(--gold); letter-spacing: 2px; }
+      h1 { font-size: clamp(22px, 4vw, 38px); margin: 6px 0 4px; letter-spacing: 1px; }
+      h1 .a { color: var(--red); } h1 .b { color: var(--teal); } h1 .vs { color: var(--dim); font-size: .7em; padding: 0 .3em; }
+      .result { font-size: 18px; margin: 0 0 18px; }
+      .result b { color: var(--gold); }
+      video { width: 100%; display: block; background: #000; border: 2px solid var(--line); border-radius: 6px; image-rendering: pixelated; }
+      .bar { display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0 26px; }
+      .bar a, .bar button { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 8px 12px; font: inherit; cursor: pointer; text-decoration: none; }
+      .bar a:hover, .bar button:hover, .moment:hover { border-color: var(--gold); }
+      .bar .on { border-color: var(--gold); color: var(--gold); }
+      h2 { color: var(--gold); font-size: 18px; letter-spacing: 2px; margin: 34px 0 12px; }
+      .moments { display: grid; gap: 8px; }
+      .moment { display: grid; grid-template-columns: 64px 1fr; gap: 12px; align-items: start; text-align: left; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; color: var(--text); font: inherit; cursor: pointer; }
+      .moment .t { color: var(--gold); }
+      .moment .who.a { color: var(--red); } .moment .who.b { color: var(--teal); }
+      .moment .q { color: #ffb0e0; }
+      .moment .r { color: var(--dim); }
+      table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); }
+      th, td { padding: 8px 12px; border-bottom: 1px solid var(--line); text-align: left; }
+      th { color: var(--dim); font-weight: normal; }
+      td.a { color: var(--red); } td.b { color: var(--teal); }
+      .how { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px; }
+      .card { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; }
+      .card b { color: var(--gold); }
+      pre { background: #000; border: 1px solid var(--line); padding: 12px; overflow-x: auto; border-radius: 4px; }
+      footer { color: var(--dim); margin-top: 40px; font-size: 13px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <a class="logo" href="../">SNAKES</a>
+        <span class="tag">LIVE CLANKER ARENA</span>
+        <a href="../">play the game ›</a>
+        <a href="https://github.com/snakewizardd/snake-worms">source ›</a>
+      </header>
+
+      <h1><span class="a">CLAUDE FABLE 5.1</span><span class="vs">VS</span><span class="b">GPT-6 ASTRA</span></h1>
+      <p class="result">🏆 <b>Claude Fable 5.1 wins</b>, last team standing, in 7 turns. Real Player Mode, Accelerationist world.</p>
+
+      <video id="v" controls preload="metadata" poster="fable-5.1-vs-gpt-6-astra/poster.jpg" src="fable-5.1-vs-gpt-6-astra/highlights.mp4"></video>
+      <div class="bar">
+        <button id="cutH" class="on">Highlights · 2:07 (thinking at 8×)</button>
+        <button id="cutF">Full match · 5:17 real time</button>
+        <a href="https://github.com/snakewizardd/snake-worms/blob/main/docs/arena/fable-5.1-vs-gpt-6-astra/report.md">Turn-by-turn report</a>
+        <a href="fable-5.1-vs-gpt-6-astra/match.jsonl" download>Full decision log (JSONL)</a>
+      </div>
+
+      <h2>WHAT HAPPENED</h2>
+      <p>Two frontier models each controlled a team of snakes, live, through the game's own controls. Neither had auto-aim. Each saw the map, the positions and the wind, could check the same dotted aiming arc a human sees, knew the game's physics rules, and chose every angle and power itself. After each shot it was told where the shot actually landed. Click a moment to jump to it.</p>
+      <div class="moments" id="moments"></div>
+
+      <h2>SCOREBOARD</h2>
+      <table>
+        <tr><th></th><th>Claude Fable 5.1</th><th>GPT-6 Astra</th></tr>
+        <tr><th>Result</th><td class="a">Winner · ROKO'S BASILISK at 100 HP</td><td class="b">Both snakes lost</td></tr>
+        <tr><th>Turns</th><td>4</td><td>3</td></tr>
+        <tr><th>Aim-guide checks</th><td>3</td><td>2</td></tr>
+        <tr><th>Average think time per turn</th><td>55.0 s</td><td>17.1 s</td></tr>
+        <tr><th>Model calls</th><td>11</td><td>8</td></tr>
+        <tr><th>Tokens in / out</th><td>188,662 / 13,585</td><td>53,870 / 1,267</td></tr>
+        <tr><th>AI credits used</th><td>110.05</td><td>23.16</td></tr>
+        <tr><th>Forfeits / errors</th><td>0 / 0</td><td>0 / 0</td></tr>
+      </table>
+
+      <h2>HOW IT WORKS</h2>
+      <div class="how">
+        <div class="card"><b>The game is the referee.</b> Models never touch the game state. Every move goes through the same virtual controller the built-in CPU uses: select weapon, face, aim, charge, fire.</div>
+        <div class="card"><b>Only game tools.</b> Each model ran in its own locked-down GitHub Copilot SDK session that could only see SNAKES tools: get_state, aim_guide, move, jump, attack, skip_turn and taunt. No shell, no files, no web.</div>
+        <div class="card"><b>Real Player Mode.</b> No solver and no damage preview. The aim guide shows the first 80 ticks of the arc and stops at terrain. Long shots need maths or judgement, so Fable computed its own ballistics.</div>
+        <div class="card"><b>Everything is logged.</b> Every prompt, tool call, aim check, reasoning summary, decision, landing point and token is in the log. The video is the broadcast canvas recorded live.</div>
+      </div>
+
+      <h2>RUN YOUR OWN</h2>
+      <pre>git clone https://github.com/snakewizardd/snake-worms
+cd snake-worms
+npm ci
+npm run arena      # needs a signed-in GitHub Copilot CLI
+# open http://127.0.0.1:5173 → LIVE CLANKER ARENA → pick two models</pre>
+      <p>Free mock players are built in, so you can try the whole pipeline without spending anything.</p>
+
+      <footer>SNAKES is an original fan-made homage to classic turn-based artillery games, not affiliated with Team17 or <i>Worms™</i>. Recorded 2026-10-11. Model names are as reported by the GitHub Copilot catalog at the time.</footer>
+    </main>
+    <script>
+      const M = [
+        [9.5, 'a', 'CLAUDE FABLE 5.1', 'Bazooka, 65° left, 69% power, lobbed over the hill riding the wind', 'Incoming token drop, SNEK. Catch!', 'SNEK-9000 −73 HP. Landed 3 px right and 10 px above the target, after Fable extrapolated past the end of the aim guide.'],
+        [25.2, 'b', 'GPT-6 ASTRA', 'Venom spit, 35° right, 47% power', 'Scaling comes with recurring costs.', 'SCALEMAXXER −12 HP and poisoned. Landed 5 px from the target.'],
+        [42.4, 'a', 'CLAUDE FABLE 5.1', 'Soft-lobbed bazooka, 10° right, 27% power, into SNEK-9000\u2019s pit', 'Recurring costs? Here\u2019s your final invoice.', 'SNEK-9000 eliminated.'],
+        [57.0, 'b', 'GPT-6 ASTRA', 'Sheep, sent right', 'Your invoice has a baaa-lance due.', 'SCALEMAXXER −56 HP, down to 2.'],
+        [70.7, 'a', 'CLAUDE FABLE 5.1', 'Piano drop on DOOMER\u2019s pit (open sky overhead)', 'Requiem in D(oomer) minor. Enjoy the concert.', 'DOOMER −49 HP. First impact 12 px above the target.'],
+        [84.5, 'b', 'GPT-6 ASTRA', 'Tail whip on the 1-HP SCALEMAXXER, saving its explosives', 'One HP. Zero runway.', 'SCALEMAXXER eliminated.'],
+        [108.8, 'a', 'CLAUDE FABLE 5.1', 'Sheep Rain straight down DOOMER\u2019s shaft. It ruled out an air strike as too risky for a narrow shaft.', 'Counting sheep? They\u2019re counting YOU.', 'DOOMER eliminated, landing 5 px from the target. Claude Fable 5.1 wins.'],
+      ];
+      const v = document.getElementById('v');
+      const box = document.getElementById('moments');
+      const fmt = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
+      let full = false;
+      for (const [t, side, who, what, quote, result] of M) {
+        const b = document.createElement('button');
+        b.className = 'moment';
+        b.innerHTML = `<span class="t">${fmt(t)}</span><span><span class="who ${side}">${who}</span> · ${what}<br><span class="q">“${quote}”</span><br><span class="r">${result}</span></span>`;
+        b.onclick = () => {
+          if (full) setCut(false);
+          v.currentTime = Math.max(0, t - 2);
+          v.play();
+          v.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        };
+        box.appendChild(b);
+      }
+      const setCut = (f) => {
+        full = f;
+        v.src = `fable-5.1-vs-gpt-6-astra/${f ? 'broadcast' : 'highlights'}.mp4`;
+        document.getElementById('cutH').classList.toggle('on', !f);
+        document.getElementById('cutF').classList.toggle('on', f);
+      };
+      document.getElementById('cutH').onclick = () => setCut(false);
+      document.getElementById('cutF').onclick = () => setCut(true);
+    </script>
+  </body>
+</html>
